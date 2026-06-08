@@ -1,22 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classNames from 'classnames';
 import styles from './index.module.scss';
-import { exportRecords } from '@/data/works';
+import { exportRecords as initialRecords } from '@/data/works';
+import type { ExportRecord, Work } from '@/types/work';
 
 const ExportPage: React.FC = () => {
   const [selectedSizes, setSelectedSizes] = useState<string[]>(['current']);
   const [selectedFormat, setSelectedFormat] = useState('png');
   const [quality, setQuality] = useState(80);
+  const [exportList, setExportList] = useState<ExportRecord[]>([...initialRecords]);
+  const [isExporting, setIsExporting] = useState(false);
 
   const sizes = [
-    { id: 'current', name: '当前尺寸', value: '750 × 1334', isDefault: true },
-    { id: 'square', name: '正方形', value: '1080 × 1080' },
-    { id: 'phone', name: '手机全屏', value: '1080 × 1920' },
-    { id: 'banner', name: 'Banner', value: '750 × 300' },
-    { id: 'xhs', name: '小红书', value: '1080 × 1440' },
-    { id: 'long', name: '长图', value: '1080 × 3840' }
+    { id: 'current', name: '当前尺寸', value: '750×1334', isDefault: true },
+    { id: 'square', name: '正方形', value: '1080×1080' },
+    { id: 'phone', name: '手机全屏', value: '1080×1920' },
+    { id: 'banner', name: 'Banner', value: '750×300' },
+    { id: 'xhs', name: '小红书', value: '1080×1440' },
+    { id: 'long', name: '长图', value: '1080×3840' }
   ];
 
   const formats = [
@@ -26,6 +29,16 @@ const ExportPage: React.FC = () => {
     { id: 'longImage', name: '长图', icon: '📜' }
   ];
 
+  const formatCurrentTime = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  };
+
   const handleSizeToggle = (sizeId: string) => {
     setSelectedSizes(prev => {
       if (prev.includes(sizeId)) {
@@ -34,25 +47,55 @@ const ExportPage: React.FC = () => {
         return [...prev, sizeId];
       }
     });
-    console.log('[Export] 选择尺寸:', sizeId);
+  };
+
+  const getSizeValue = (sizeId: string, formatId: string): string => {
+    const size = sizes.find(s => s.id === sizeId);
+    if (!size) return '';
+    if (formatId === 'longImage' || sizeId === 'long') {
+      return '1080×3840';
+    }
+    return size.value;
   };
 
   const handleExport = () => {
-    console.log('[Export] 开始导出:', {
-      sizes: selectedSizes,
-      format: selectedFormat,
-      quality
-    });
+    if (selectedSizes.length === 0) {
+      Taro.showToast({
+        title: '请选择至少一个尺寸',
+        icon: 'none'
+      });
+      return;
+    }
+
+    setIsExporting(true);
     Taro.showLoading({
       title: '正在导出...'
     });
+
     setTimeout(() => {
+      const newRecords: ExportRecord[] = selectedSizes.map((sizeId, index) => {
+        const size = sizes.find(s => s.id === sizeId);
+        const sizeValue = getSizeValue(sizeId, selectedFormat);
+        const format = selectedFormat === 'longImage' ? 'longImage' : selectedFormat as 'png' | 'jpg' | 'pdf' | 'longImage';
+        return {
+          id: `e${Date.now()}-${index}`,
+          workId: 'current',
+          workTitle: '618活动主视觉',
+          format: format,
+          size: sizeValue,
+          exportAt: formatCurrentTime(),
+          status: 'success' as const
+        };
+      });
+
+      setExportList(prev => [...newRecords, ...prev]);
       Taro.hideLoading();
       Taro.showToast({
-        title: '导出成功',
+        title: `导出成功(${selectedSizes.length}张)`,
         icon: 'success'
       });
-    }, 2000);
+      setIsExporting(false);
+    }, 1500);
   };
 
   const handleDownload = (recordId: string) => {
@@ -63,7 +106,45 @@ const ExportPage: React.FC = () => {
     });
   };
 
-  const recentExports = exportRecords.slice(0, 4);
+  const handleSaveToWorks = async () => {
+    try {
+      const newWork: Work = {
+        id: `w${Date.now()}`,
+        title: '618活动主视觉',
+        cover: 'https://picsum.photos/id/1/400/600',
+        status: 'draft',
+        size: '750×1334',
+        updatedAt: formatCurrentTime(),
+        createdAt: formatCurrentTime(),
+        tags: ['618', '促销']
+      };
+
+      const storageKey = 'draft_works';
+      const existingData = await Taro.getStorage({ key: storageKey }).catch(() => ({ data: [] }));
+      const existingWorks: Work[] = existingData.data || [];
+      const updatedWorks = [newWork, ...existingWorks];
+      
+      await Taro.setStorage({ key: storageKey, data: updatedWorks });
+      
+      Taro.showToast({
+        title: '已保存到草稿',
+        icon: 'success'
+      });
+    } catch (e) {
+      console.error('[Export] 保存失败:', e);
+      Taro.showToast({
+        title: '保存失败',
+        icon: 'none'
+      });
+    }
+  };
+
+  const recentExports = useMemo(() => exportList.slice(0, 4), [exportList]);
+
+  const formatDisplay = (format: string) => {
+    if (format === 'longImage') return '长图';
+    return format.toUpperCase();
+  };
 
   return (
     <View className={styles.page}>
@@ -130,7 +211,7 @@ const ExportPage: React.FC = () => {
           <View className={styles.qualityItem}>
             <Text className={styles.qualityLabel}>图片质量</Text>
             <View className={styles.qualitySlider}>
-              <View className={styles.qualityFill} />
+              <View className={styles.qualityFill} style={{ width: `${quality}%` }} />
             </View>
             <Text className={styles.qualityValue}>{quality}%</Text>
           </View>
@@ -148,14 +229,14 @@ const ExportPage: React.FC = () => {
             <View className={styles.historyCover}>
               <Image
                 className={styles.historyCoverImg}
-                src={`https://picsum.photos/id/${100 + parseInt(record.id.slice(1))}/100/150`}
+                src={`https://picsum.photos/id/${100 + (parseInt(record.id.replace(/\D/g, '').slice(-3)) || 1) % 200}/100/150`}
                 mode="aspectFill"
               />
             </View>
             <View className={styles.historyInfo}>
               <Text className={styles.historyName}>{record.workTitle}</Text>
               <Text className={styles.historyMeta}>
-                {record.format.toUpperCase()} · {record.size} · {record.exportAt}
+                {formatDisplay(record.format)} · {record.size} · {record.exportAt}
               </Text>
             </View>
             <View
@@ -173,11 +254,14 @@ const ExportPage: React.FC = () => {
       </View>
 
       <View className={styles.bottomBar}>
-        <View className={styles.secondaryBtn}>
+        <View className={styles.secondaryBtn} onClick={handleSaveToWorks}>
           <Text>保存到作品</Text>
         </View>
-        <View className={styles.primaryBtn} onClick={handleExport}>
-          <Text>立即导出 ({selectedSizes.length}个)</Text>
+        <View
+          className={classNames(styles.primaryBtn, (isExporting || selectedSizes.length === 0) && styles.disabled)}
+          onClick={handleExport}
+        >
+          <Text>{isExporting ? '导出中...' : `立即导出 (${selectedSizes.length}个)`}</Text>
         </View>
       </View>
     </View>

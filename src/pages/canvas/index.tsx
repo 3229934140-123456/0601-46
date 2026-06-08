@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, Image, Button } from '@tarojs/components';
+import React, { useState, useMemo } from 'react';
+import { View, Text, Image, Input, ScrollView } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classNames from 'classnames';
 import styles from './index.module.scss';
+import { imageMaterials, stickerMaterials } from '@/data/materials';
 
 interface Layer {
   id: string;
@@ -15,27 +16,38 @@ interface Layer {
   content: string;
   fontSize?: number;
   color?: string;
+  fontFamily?: string;
+  textAlign?: 'left' | 'center' | 'right';
   opacity: number;
   rotation: number;
   shadow: boolean;
   visible: boolean;
   locked: boolean;
   zIndex: number;
+  cropX?: number;
+  cropY?: number;
+  cropScale?: number;
 }
 
 const CanvasPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('properties');
-  const [selectedElementId, setSelectedElementId] = useState('text1');
+  const [selectedElementId, setSelectedElementId] = useState<string | null>('text1');
   const [canUndo, setCanUndo] = useState(true);
   const [canRedo, setCanRedo] = useState(false);
+  const [showMaterialPicker, setShowMaterialPicker] = useState(false);
+  const [pickerType, setPickerType] = useState<'image' | 'sticker'>('image');
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState(0);
+  const [brandFont, setBrandFont] = useState('default');
+  const [layerCounter, setLayerCounter] = useState(10);
 
   const [layers, setLayers] = useState<Layer[]>([
     {
       id: 'bg1',
       name: '背景图',
       type: 'image',
-      x: 0,
-      y: 0,
+      x: 50,
+      y: 50,
       width: 100,
       height: 100,
       content: 'https://picsum.photos/id/1025/600/800',
@@ -44,7 +56,10 @@ const CanvasPage: React.FC = () => {
       shadow: false,
       visible: true,
       locked: true,
-      zIndex: 0
+      zIndex: 0,
+      cropX: 0,
+      cropY: 0,
+      cropScale: 1
     },
     {
       id: 'text1',
@@ -57,6 +72,8 @@ const CanvasPage: React.FC = () => {
       content: '618 大促狂欢',
       fontSize: 36,
       color: '#ffffff',
+      fontFamily: 'default',
+      textAlign: 'center',
       opacity: 1,
       rotation: 0,
       shadow: true,
@@ -75,6 +92,8 @@ const CanvasPage: React.FC = () => {
       content: '全场5折起 · 限时抢购',
       fontSize: 18,
       color: '#ffffff',
+      fontFamily: 'default',
+      textAlign: 'center',
       opacity: 0.9,
       rotation: 0,
       shadow: true,
@@ -102,11 +121,19 @@ const CanvasPage: React.FC = () => {
 
   const selectedLayer = layers.find(l => l.id === selectedElementId);
 
-  const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+  const sortedLayers = useMemo(() => 
+    [...layers].sort((a, b) => b.zIndex - a.zIndex),
+    [layers]
+  );
+
+  const maxZIndex = useMemo(() => 
+    Math.max(...layers.map(l => l.zIndex)),
+    [layers]
+  );
 
   const brandColors = [
-    { name: '品牌紫', colors: ['#7B61FF', '#9B85FF', '#5A45E0'] },
-    { name: '活力橙', colors: ['#FF7D00', '#FFA94D', '#E66A00'] }
+    { name: '品牌紫', colors: ['#7B61FF', '#9B85FF', '#5A45E0'], textColor: '#ffffff' },
+    { name: '活力橙', colors: ['#FF7D00', '#FFA94D', '#E66A00'], textColor: '#ffffff' }
   ];
 
   const colorPalette = [
@@ -124,6 +151,14 @@ const CanvasPage: React.FC = () => {
     { id: 'art', name: '艺术体' }
   ];
 
+  const stickerEmojis = ['🎊', '🎉', '✨', '⭐', '💫', '🌟', '🎈', '🎁', '💎', '🌸', '🌺', '🌻'];
+
+  const getNewLayerId = () => {
+    const newId = `layer_${layerCounter}`;
+    setLayerCounter(prev => prev + 1);
+    return newId;
+  };
+
   const handleUndo = () => {
     console.log('[Canvas] 撤销');
     setCanUndo(false);
@@ -138,6 +173,24 @@ const CanvasPage: React.FC = () => {
 
   const handleSave = () => {
     console.log('[Canvas] 保存草稿');
+    const workData = {
+      id: 'work_' + Date.now(),
+      title: '618活动主视觉',
+      cover: layers.find(l => l.type === 'image')?.content || '',
+      status: 'draft',
+      size: '750×1334',
+      updatedAt: new Date().toLocaleString('zh-CN'),
+      createdAt: new Date().toLocaleString('zh-CN')
+    };
+    
+    try {
+      const savedWorks = Taro.getStorageSync('draftWorks') || [];
+      savedWorks.unshift(workData);
+      Taro.setStorageSync('draftWorks', savedWorks);
+    } catch (e) {
+      console.error('[Canvas] 保存失败:', e);
+    }
+    
     Taro.showToast({
       title: '已保存到草稿',
       icon: 'success'
@@ -184,6 +237,26 @@ const CanvasPage: React.FC = () => {
     );
   };
 
+  const handleTextAlignChange = (align: 'left' | 'center' | 'right') => {
+    if (!selectedElementId) return;
+    setLayers(prev =>
+      prev.map(l =>
+        l.id === selectedElementId ? { ...l, textAlign: align } : l
+      )
+    );
+    console.log('[Canvas] 修改对齐:', align);
+  };
+
+  const handleFontChange = (fontId: string) => {
+    if (!selectedElementId) return;
+    setLayers(prev =>
+      prev.map(l =>
+        l.id === selectedElementId ? { ...l, fontFamily: fontId } : l
+      )
+    );
+    console.log('[Canvas] 修改字体:', fontId);
+  };
+
   const handleToggleVisibility = (layerId: string) => {
     setLayers(prev =>
       prev.map(l =>
@@ -201,23 +274,51 @@ const CanvasPage: React.FC = () => {
   };
 
   const handleMoveLayer = (layerId: string, direction: 'up' | 'down') => {
-    const layerIndex = layers.findIndex(l => l.id === layerId);
-    if (layerIndex === -1) return;
+    const sorted = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+    const currentIndex = sorted.findIndex(l => l.id === layerId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
 
     const newLayers = [...layers];
-    const targetIndex = direction === 'up' ? layerIndex - 1 : layerIndex + 1;
+    const currentLayer = newLayers.find(l => l.id === layerId);
+    const targetLayer = sorted[targetIndex];
+    if (!currentLayer || !targetLayer) return;
 
-    if (targetIndex < 0 || targetIndex >= layers.length) return;
-
-    const tempZIndex = newLayers[layerIndex].zIndex;
-    newLayers[layerIndex].zIndex = newLayers[targetIndex].zIndex;
-    newLayers[targetIndex].zIndex = tempZIndex;
+    const tempZIndex = currentLayer.zIndex;
+    currentLayer.zIndex = targetLayer.zIndex;
+    targetLayer.zIndex = tempZIndex;
 
     setLayers(newLayers);
     console.log('[Canvas] 移动图层:', layerId, direction);
   };
 
+  const handleDeleteLayer = (layerId: string) => {
+    if (layerId === 'bg1') {
+      Taro.showToast({ title: '背景层不能删除', icon: 'none' });
+      return;
+    }
+    setLayers(prev => prev.filter(l => l.id !== layerId));
+    if (selectedElementId === layerId) {
+      setSelectedElementId(null);
+    }
+    console.log('[Canvas] 删除图层:', layerId);
+  };
+
   const handleApplyBrand = (brandIndex: number) => {
+    setSelectedBrand(brandIndex);
+    const brand = brandColors[brandIndex];
+    
+    setLayers(prev =>
+      prev.map(l => {
+        if (l.type === 'text' && !l.locked) {
+          return { ...l, color: brand.textColor, fontFamily: brandFont };
+        }
+        return l;
+      })
+    );
+    
     console.log('[Canvas] 应用品牌:', brandIndex);
     Taro.showToast({
       title: '已应用品牌风格',
@@ -225,12 +326,173 @@ const CanvasPage: React.FC = () => {
     });
   };
 
-  const handleAddElement = (type: string) => {
-    console.log('[Canvas] 添加元素:', type);
+  const handleBrandFontChange = (fontId: string) => {
+    setBrandFont(fontId);
+    console.log('[Canvas] 品牌字体:', fontId);
+  };
+
+  const handleAddText = () => {
+    const newId = getNewLayerId();
+    const newLayer: Layer = {
+      id: newId,
+      name: '新文字',
+      type: 'text',
+      x: 50,
+      y: 50,
+      width: 60,
+      height: 10,
+      content: '双击编辑文字',
+      fontSize: 24,
+      color: '#ffffff',
+      fontFamily: 'default',
+      textAlign: 'center',
+      opacity: 1,
+      rotation: 0,
+      shadow: false,
+      visible: true,
+      locked: false,
+      zIndex: maxZIndex + 1
+    };
+    setLayers(prev => [...prev, newLayer]);
+    setSelectedElementId(newId);
+    setActiveTab('properties');
+    console.log('[Canvas] 添加文字:', newId);
+  };
+
+  const handleAddSticker = () => {
+    setPickerType('sticker');
+    setShowMaterialPicker(true);
+  };
+
+  const handleAddImage = () => {
+    setPickerType('image');
+    setShowMaterialPicker(true);
+  };
+
+  const handleSelectSticker = (emoji: string) => {
+    const newId = getNewLayerId();
+    const newLayer: Layer = {
+      id: newId,
+      name: '贴纸',
+      type: 'sticker',
+      x: 50,
+      y: 50,
+      width: 15,
+      height: 15,
+      content: emoji,
+      opacity: 1,
+      rotation: 0,
+      shadow: false,
+      visible: true,
+      locked: false,
+      zIndex: maxZIndex + 1
+    };
+    setLayers(prev => [...prev, newLayer]);
+    setSelectedElementId(newId);
+    setShowMaterialPicker(false);
+    setActiveTab('properties');
+    console.log('[Canvas] 添加贴纸:', newId);
+  };
+
+  const handleSelectImage = (imageUrl: string) => {
+    const newId = getNewLayerId();
+    const newLayer: Layer = {
+      id: newId,
+      name: '图片',
+      type: 'image',
+      x: 50,
+      y: 50,
+      width: 60,
+      height: 45,
+      content: imageUrl,
+      opacity: 1,
+      rotation: 0,
+      shadow: false,
+      visible: true,
+      locked: false,
+      zIndex: maxZIndex + 1,
+      cropX: 0,
+      cropY: 0,
+      cropScale: 1
+    };
+    setLayers(prev => [...prev, newLayer]);
+    setSelectedElementId(newId);
+    setShowMaterialPicker(false);
+    setActiveTab('properties');
+    console.log('[Canvas] 添加图片:', newId);
+  };
+
+  const handleReplaceImage = () => {
+    setPickerType('image');
+    setShowMaterialPicker(true);
+  };
+
+  const handleReplaceImageConfirm = (imageUrl: string) => {
+    if (!selectedElementId) return;
+    setLayers(prev =>
+      prev.map(l =>
+        l.id === selectedElementId
+          ? { ...l, content: imageUrl, cropX: 0, cropY: 0, cropScale: 1 }
+          : l
+      )
+    );
+    setShowMaterialPicker(false);
+    console.log('[Canvas] 替换图片:', selectedElementId);
     Taro.showToast({
-      title: `添加${type}`,
-      icon: 'none'
+      title: '图片已替换',
+      icon: 'success'
     });
+  };
+
+  const handleOpenCrop = () => {
+    if (!selectedElementId || selectedLayer?.type !== 'image') return;
+    setShowCropModal(true);
+  };
+
+  const handleCropAdjust = (direction: 'x' | 'y' | 'scale', value: number) => {
+    if (!selectedElementId) return;
+    setLayers(prev =>
+      prev.map(l => {
+        if (l.id !== selectedElementId) return l;
+        if (direction === 'x') return { ...l, cropX: value };
+        if (direction === 'y') return { ...l, cropY: value };
+        if (direction === 'scale') return { ...l, cropScale: value };
+        return l;
+      })
+    );
+  };
+
+  const handleCropConfirm = () => {
+    setShowCropModal(false);
+    Taro.showToast({
+      title: '裁剪完成',
+      icon: 'success'
+    });
+  };
+
+  const handleAddShape = () => {
+    const newId = getNewLayerId();
+    const newLayer: Layer = {
+      id: newId,
+      name: '形状',
+      type: 'shape',
+      x: 50,
+      y: 50,
+      width: 30,
+      height: 30,
+      content: '',
+      color: '#7B61FF',
+      opacity: 1,
+      rotation: 0,
+      shadow: false,
+      visible: true,
+      locked: false,
+      zIndex: maxZIndex + 1
+    };
+    setLayers(prev => [...prev, newLayer]);
+    setSelectedElementId(newId);
+    setActiveTab('properties');
+    console.log('[Canvas] 添加形状:', newId);
   };
 
   const handlePreview = () => {
@@ -243,6 +505,12 @@ const CanvasPage: React.FC = () => {
 
   const renderCanvasElement = (layer: Layer) => {
     const isSelected = layer.id === selectedElementId;
+
+    const getTextAlignStyle = () => {
+      if (layer.textAlign === 'left') return 'flex-start';
+      if (layer.textAlign === 'right') return 'flex-end';
+      return 'center';
+    };
 
     return (
       <View
@@ -259,9 +527,15 @@ const CanvasPage: React.FC = () => {
           height: `${layer.height}%`,
           transform: `translate(-50%, -50%) rotate(${layer.rotation}deg)`,
           zIndex: layer.zIndex,
-          opacity: layer.visible ? layer.opacity : 0.3
+          opacity: layer.visible ? layer.opacity : 0.3,
+          justifyContent: 'center',
+          alignItems: layer.type === 'text' ? getTextAlignStyle() : 'center',
+          display: 'flex'
         }}
-        onClick={() => handleElementClick(layer.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleElementClick(layer.id);
+        }}
       >
         {layer.type === 'text' && (
           <Text
@@ -269,24 +543,49 @@ const CanvasPage: React.FC = () => {
             style={{
               fontSize: `${layer.fontSize}rpx`,
               color: layer.color,
-              textShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.3)' : 'none'
+              textShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.3)' : 'none',
+              fontFamily: layer.fontFamily,
+              textAlign: layer.textAlign,
+              width: '100%'
             }}
           >
             {layer.content}
           </Text>
         )}
         {layer.type === 'image' && (
-          <Image
-            className={styles.elementImage}
-            src={layer.content}
-            mode="aspectFill"
-          />
+          <View className={styles.imageContainer}>
+            <Image
+              className={styles.elementImage}
+              src={layer.content}
+              mode="aspectFill"
+              style={{
+                transform: `scale(${layer.cropScale || 1})`,
+                transformOrigin: 'center center'
+              }}
+            />
+          </View>
         )}
         {layer.type === 'sticker' && (
-          <Text style={{ fontSize: '80rpx' }}>{layer.content}</Text>
+          <Text style={{ fontSize: '80rpx', lineHeight: 1 }}>{layer.content}</Text>
         )}
-        {isSelected && (
-          <View className={classNames(styles.resizeHandle, styles.bottomRight)} />
+        {layer.type === 'shape' && (
+          <View
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: layer.color,
+              borderRadius: '12rpx',
+              boxShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.2)' : 'none'
+            }}
+          />
+        )}
+        {isSelected && !layer.locked && (
+          <>
+            <View className={classNames(styles.resizeHandle, styles.bottomRight)} />
+            <View className={classNames(styles.resizeHandle, styles.topLeft)} />
+            <View className={classNames(styles.resizeHandle, styles.topRight)} />
+            <View className={classNames(styles.resizeHandle, styles.bottomLeft)} />
+          </>
         )}
       </View>
     );
@@ -301,40 +600,36 @@ const CanvasPage: React.FC = () => {
       );
     }
 
+    const isTextType = selectedLayer.type === 'text';
+    const isImageType = selectedLayer.type === 'image';
+
     return (
       <>
-        <View className={styles.panelSection}>
-          <Text className={styles.panelTitle}>颜色</Text>
-          <View className={styles.colorList}>
-            {colorPalette.map((color, index) => (
-              <View
-                key={index}
-                className={classNames(styles.colorItem, selectedLayer.color === color && styles.active)}
-                style={{ backgroundColor: color }}
-                onClick={() => handleColorChange(color)}
-              >
-                {selectedLayer.color === color && (
-                  <Text className={styles.colorCheck}>✓</Text>
-                )}
-              </View>
-            ))}
+        {isTextType && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>颜色</Text>
+            <View className={styles.colorList}>
+              {colorPalette.map((color, index) => (
+                <View
+                  key={index}
+                  className={classNames(styles.colorItem, selectedLayer.color === color && styles.active)}
+                  style={{ backgroundColor: color }}
+                  onClick={() => handleColorChange(color)}
+                >
+                  {selectedLayer.color === color && (
+                    <Text className={styles.colorCheck}>✓</Text>
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         <View className={styles.panelSection}>
           <Text className={styles.panelTitle}>透明度</Text>
           <View className={styles.sliderRow}>
             <Text className={styles.sliderLabel}>不透明</Text>
-            <View
-              className={styles.sliderTrack}
-              onClick={(e: any) => {
-                const rect = e.currentTarget.getBoundingClientRect?.();
-                if (rect) {
-                  const percent = Math.min(1, Math.max(0, (e.detail.x - rect.left) / rect.width));
-                  handleOpacityChange(Math.round(percent * 100) / 100);
-                }
-              }}
-            >
+            <View className={styles.sliderTrack}>
               <View
                 className={styles.sliderFill}
                 style={{ width: `${selectedLayer.opacity * 100}%` }}
@@ -356,35 +651,83 @@ const CanvasPage: React.FC = () => {
           </View>
         </View>
 
-        <View className={styles.panelSection}>
-          <Text className={styles.panelTitle}>对齐</Text>
-          <View className={styles.alignButtons}>
-            <View className={styles.alignBtn}><Text>左对齐</Text></View>
-            <View className={classNames(styles.alignBtn, styles.active)}><Text>居中</Text></View>
-            <View className={styles.alignBtn}><Text>右对齐</Text></View>
-          </View>
-        </View>
-
-        <View className={styles.panelSection}>
-          <Text className={styles.panelTitle}>字体</Text>
-          <View className={styles.fontList}>
-            {fonts.map(font => (
+        {isTextType && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>对齐</Text>
+            <View className={styles.alignButtons}>
               <View
-                key={font.id}
-                className={classNames(styles.fontItem, font.id === 'default' && styles.active)}
+                className={classNames(styles.alignBtn, selectedLayer.textAlign === 'left' && styles.active)}
+                onClick={() => handleTextAlignChange('left')}
               >
-                <Text>{font.name}</Text>
+                <Text>左对齐</Text>
               </View>
-            ))}
+              <View
+                className={classNames(styles.alignBtn, selectedLayer.textAlign === 'center' && styles.active)}
+                onClick={() => handleTextAlignChange('center')}
+              >
+                <Text>居中</Text>
+              </View>
+              <View
+                className={classNames(styles.alignBtn, selectedLayer.textAlign === 'right' && styles.active)}
+                onClick={() => handleTextAlignChange('right')}
+              >
+                <Text>右对齐</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
+
+        {isTextType && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>字体</Text>
+            <View className={styles.fontList}>
+              {fonts.map(font => (
+                <View
+                  key={font.id}
+                  className={classNames(styles.fontItem, selectedLayer.fontFamily === font.id && styles.active)}
+                  onClick={() => handleFontChange(font.id)}
+                >
+                  <Text>{font.name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {isImageType && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>图片操作</Text>
+            <View className={styles.alignButtons}>
+              <View className={styles.alignBtn} onClick={handleReplaceImage}>
+                <Text>替换图片</Text>
+              </View>
+              <View className={styles.alignBtn} onClick={handleOpenCrop}>
+                <Text>裁剪调整</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {selectedLayer.id !== 'bg1' && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>图层操作</Text>
+            <View className={styles.alignButtons}>
+              <View
+                className={classNames(styles.alignBtn, styles.dangerBtn)}
+                onClick={() => handleDeleteLayer(selectedLayer.id)}
+              >
+                <Text>删除元素</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </>
     );
   };
 
   const renderLayersPanel = () => (
     <View className={styles.layerList}>
-      {sortedLayers.map((layer, index) => (
+      {sortedLayers.map((layer) => (
         <View
           key={layer.id}
           className={classNames(styles.layerItem, layer.id === selectedElementId && styles.selected)}
@@ -392,7 +735,7 @@ const CanvasPage: React.FC = () => {
         >
           <View className={styles.layerIcon}>
             <Text>
-              {layer.type === 'text' ? 'T' : layer.type === 'image' ? '🖼' : '✨'}
+              {layer.type === 'text' ? 'T' : layer.type === 'image' ? '🖼' : layer.type === 'sticker' ? '✨' : '⬜'}
             </Text>
           </View>
           <Text className={styles.layerName}>{layer.name}</Text>
@@ -435,7 +778,7 @@ const CanvasPage: React.FC = () => {
           {brandColors.map((brand, index) => (
             <View
               key={index}
-              className={styles.brandItem}
+              className={classNames(styles.brandItem, selectedBrand === index && styles.brandActive)}
               onClick={() => handleApplyBrand(index)}
             >
               <View className={styles.brandColors}>
@@ -459,7 +802,8 @@ const CanvasPage: React.FC = () => {
           {fonts.slice(0, 4).map(font => (
             <View
               key={font.id}
-              className={classNames(styles.fontItem, font.id === 'default' && styles.active)}
+              className={classNames(styles.fontItem, brandFont === font.id && styles.active)}
+              onClick={() => handleBrandFontChange(font.id)}
             >
               <Text>{font.name}</Text>
             </View>
@@ -475,17 +819,15 @@ const CanvasPage: React.FC = () => {
         <Text className={styles.panelTitle}>添加元素</Text>
         <View style={{ display: 'flex', flexWrap: 'wrap', gap: '16rpx' }}>
           {[
-            { icon: '📝', name: '文字' },
-            { icon: '🖼️', name: '图片' },
-            { icon: '⭐', name: '贴纸' },
-            { icon: '⬜', name: '形状' },
-            { icon: '📱', name: '二维码' },
-            { icon: '💬', name: '气泡' }
+            { icon: '📝', name: '文字', action: handleAddText },
+            { icon: '🖼️', name: '图片', action: handleAddImage },
+            { icon: '⭐', name: '贴纸', action: handleAddSticker },
+            { icon: '⬜', name: '形状', action: handleAddShape },
           ].map((item, index) => (
             <View
               key={index}
               style={{
-                width: 'calc(33.33% - 12rpx)',
+                width: 'calc(50% - 8rpx)',
                 padding: '24rpx',
                 background: '#f5f6f7',
                 borderRadius: '12rpx',
@@ -494,9 +836,9 @@ const CanvasPage: React.FC = () => {
                 alignItems: 'center',
                 gap: '8rpx'
               }}
-              onClick={() => handleAddElement(item.name)}
+              onClick={item.action}
             >
-              <Text style={{ fontSize: '40rpx' }}>{item.icon}</Text>
+              <Text style={{ fontSize: '48rpx' }}>{item.icon}</Text>
               <Text style={{ fontSize: '24rpx', color: '#4E5969' }}>{item.name}</Text>
             </View>
           ))}
@@ -520,12 +862,157 @@ const CanvasPage: React.FC = () => {
     }
   };
 
+  const renderMaterialPicker = () => {
+    if (!showMaterialPicker) return null;
+
+    const materials = pickerType === 'image' ? imageMaterials : stickerMaterials;
+    const items = pickerType === 'sticker' 
+      ? stickerEmojis.map((emoji) => ({ id: emoji, name: emoji, cover: '', type: 'sticker' as const }))
+      : materials;
+
+    const handleSelect = pickerType === 'image' ? handleSelectImage : handleSelectSticker;
+    const handleReplace = selectedElementId && selectedLayer?.type === 'image' && pickerType === 'image';
+    const selectFn = handleReplace ? handleReplaceImageConfirm : handleSelect;
+
+    return (
+      <View className={styles.modalOverlay} onClick={() => setShowMaterialPicker(false)}>
+        <View className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <View className={styles.modalHeader}>
+            <Text className={styles.modalTitle}>
+              {pickerType === 'image' ? '选择图片' : '选择贴纸'}
+            </Text>
+            <View className={styles.modalClose} onClick={() => setShowMaterialPicker(false)}>
+              <Text>✕</Text>
+            </View>
+          </View>
+          <ScrollView className={styles.modalBody} scrollY>
+            {pickerType === 'sticker' ? (
+              <View className={styles.stickerGrid}>
+                {stickerEmojis.map((emoji, index) => (
+                  <View
+                    key={index}
+                    className={styles.stickerItem}
+                    onClick={() => selectFn(emoji)}
+                  >
+                    <Text style={{ fontSize: '64rpx' }}>{emoji}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View className={styles.imageGrid}>
+                {imageMaterials.map((material, index) => (
+                  <View
+                    key={material.id}
+                    className={styles.imageItem}
+                    onClick={() => selectFn(material.cover)}
+                  >
+                    <Image
+                      className={styles.imageItemImg}
+                      src={material.cover}
+                      mode="aspectFill"
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  };
+
+  const renderCropModal = () => {
+    if (!showCropModal || !selectedLayer) return null;
+
+    const cropX = selectedLayer.cropX || 0;
+    const cropY = selectedLayer.cropY || 0;
+    const cropScale = selectedLayer.cropScale || 1;
+
+    return (
+      <View className={styles.modalOverlay} onClick={() => setShowCropModal(false)}>
+        <View className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <View className={styles.modalHeader}>
+            <Text className={styles.modalTitle}>图片裁剪调整</Text>
+            <View className={styles.modalClose} onClick={() => setShowCropModal(false)}>
+              <Text>✕</Text>
+            </View>
+          </View>
+          <View className={styles.cropPreview}>
+            <View className={styles.cropPreviewImg}>
+              <Image
+                src={selectedLayer.content}
+                mode="aspectFill"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  transform: `scale(${cropScale}) translate(${cropX * 0.5}px, ${cropY * 0.5}px)`
+                }}
+              />
+            </View>
+          </View>
+          <View className={styles.cropControls}>
+            <View className={styles.sliderRow}>
+              <Text className={styles.sliderLabel}>缩放</Text>
+              <View className={styles.sliderTrack}>
+                <View
+                  className={styles.sliderFill}
+                  style={{ width: `${((cropScale - 0.5) / 1.5 * 100}%` }}
+                />
+              </View>
+              <Text className={styles.sliderValue}>{Math.round(cropScale * 100)}%</Text>
+            </View>
+            <View className={styles.sliderRow}>
+              <Text className={styles.sliderLabel}>水平</Text>
+              <View className={styles.sliderTrack}>
+                <View
+                  className={styles.sliderFill}
+                  style={{ width: `${((cropX + 50) / 100 * 100}%` }}
+                />
+              </View>
+              <Text className={styles.sliderValue}>{cropX}%</Text>
+            </View>
+            <View className={styles.sliderRow}>
+              <Text className={styles.sliderLabel}>垂直</Text>
+              <View className={styles.sliderTrack}>
+                <View
+                  className={styles.sliderFill}
+                  style={{ width: `${((cropY + 50) / 100 * 100)}%` }}
+                />
+              </View>
+              <Text className={styles.sliderValue}>{cropY}%</Text>
+            </View>
+          </View>
+          <View className={styles.cropActions}>
+            <View
+              className={styles.cropBtn}
+              style={{ flex: 1, background: '#f5f6f7', color: '#1D2129' }}
+              onClick={() => {
+                handleCropAdjust('scale', 1);
+                handleCropAdjust('x', 0);
+                handleCropAdjust('y', 0);
+              }}
+            >
+              <Text>重置</Text>
+            </View>
+            <View
+              className={styles.cropBtn}
+              style={{ flex: 2, background: '#7B61FF', color: '#fff' }}
+              onClick={handleCropConfirm}
+            >
+              <Text>确定</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View className={styles.page}>
       <View className={styles.topBar}>
         <View className={styles.topBarLeft}>
-          <View className={styles.topBtn} onClick={handleUndo}>
-            <Text className={classNames(styles.topBtnText, !canUndo && styles.disabled)}>↶</Text>
+          <View className={classNames(styles.topBtn, !canUndo && styles.disabled)} onClick={handleUndo}>
+            <Text className={styles.topBtnText}>↶</Text>
           </View>
           <View className={classNames(styles.topBtn, !canRedo && styles.disabled)} onClick={handleRedo}>
             <Text className={styles.topBtnText}>↷</Text>
@@ -541,7 +1028,7 @@ const CanvasPage: React.FC = () => {
         </View>
       </View>
 
-      <View className={styles.canvasArea}>
+      <View className={styles.canvasArea} onClick={() => setSelectedElementId(null)}>
         <View className={styles.canvasContainer}>
           {sortedLayers.map(layer => renderCanvasElement(layer))}
         </View>
@@ -579,6 +1066,9 @@ const CanvasPage: React.FC = () => {
           </View>
         </View>
       </View>
+
+      {renderMaterialPicker()}
+      {renderCropModal()}
     </View>
   );
 };

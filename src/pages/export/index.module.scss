@@ -320,4 +320,27 @@
   color: #fff;
   font-weight: $font-weight-semibold;
   box-shadow: 0 4rpx 16rpx rgba(123, 97, 255, 0.4);
+  transition: opacity $transition-fast;
+
+  &.disabled {
+    opacity: 0.5;
+  }
+}
+
+.secondaryBtn {
+  flex: 1;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-gray;
+  border-radius: $radius-button;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+  transition: opacity $transition-fast;
+
+  &:active {
+    opacity: 0.8;
+  }
 }

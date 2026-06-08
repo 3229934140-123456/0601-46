@@ -262,4 +262,196 @@
   border-radius: 36rpx;
   font-size: 28rpx;
   color: #fff;
+  transition: opacity $transition-fast;
+
+  &.disabled {
+    opacity: 0.5;
+  }
+}
+
+.inputField {
+  flex: 1;
+  height: 100%;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.memberSection {
+  background: $color-bg-card;
+  padding: $spacing-md $page-padding;
+  display: flex;
+  align-items: center;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.memberList {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.memberItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80rpx;
+}
+
+.memberAvatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  margin-bottom: 8rpx;
+  background: $color-bg-gray;
+}
+
+.memberName {
+  font-size: 20rpx;
+  color: $color-text-secondary;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.memberCount {
+  flex-shrink: 0;
+  margin-left: $spacing-md;
+}
+
+.memberCountText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  width: 600rpx;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-lg;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.modalTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.modalClose {
+  font-size: 32rpx;
+  color: $color-text-tertiary;
+  padding: 8rpx;
+}
+
+.modalBody {
+  padding: $spacing-xl $spacing-lg;
+}
+
+.inviteCandidate {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md;
+  background: $color-bg-gray;
+  border-radius: $radius-md;
+}
+
+.candidateAvatar {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  margin-right: $spacing-md;
+  background: $color-bg-gray;
+}
+
+.candidateInfo {
+  flex: 1;
+}
+
+.candidateName {
+  display: block;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  margin-bottom: 8rpx;
+}
+
+.candidateRole {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.noMoreMembers {
+  padding: $spacing-xl 0;
+  text-align: center;
+}
+
+.noMoreText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.modalFooter {
+  display: flex;
+  gap: $spacing-md;
+  padding: $spacing-lg;
+  border-top: 1rpx solid $color-divider;
+}
+
+.cancelBtn {
+  flex: 1;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-gray;
+  border-radius: $radius-button;
+}
+
+.cancelBtnText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+}
+
+.confirmBtn {
+  flex: 1;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $gradient-primary;
+  border-radius: $radius-button;
+
+  &.disabled {
+    opacity: 0.5;
+  }
+}
+
+.confirmBtnText {
+  font-size: $font-size-md;
+  color: #fff;
+  font-weight: $font-weight-semibold;
 }

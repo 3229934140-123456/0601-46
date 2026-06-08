@@ -1,19 +1,44 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, Input, ScrollView } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classNames from 'classnames';
 import styles from './index.module.scss';
 import WorkCard from '@/components/WorkCard';
-import { draftWorks, publishedWorks } from '@/data/works';
+import { draftWorks as initialDraftWorks, publishedWorks } from '@/data/works';
 import type { Work } from '@/types/work';
 
 const WorksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'draft' | 'published'>('draft');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [draftList, setDraftList] = useState<Work[]>([...initialDraftWorks]);
+
+  useEffect(() => {
+    loadDraftWorks();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      loadDraftWorks();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const loadDraftWorks = async () => {
+    try {
+      const storageKey = 'draft_works';
+      const res = await Taro.getStorage({ key: storageKey }).catch(() => ({ data: [] }));
+      const savedWorks: Work[] = res.data || [];
+      const existingIds = new Set(initialDraftWorks.map(w => w.id));
+      const newWorks = savedWorks.filter(w => !existingIds.has(w.id));
+      setDraftList([...newWorks, ...initialDraftWorks]);
+    } catch (e) {
+      console.error('[Works] 加载草稿失败:', e);
+    }
+  };
 
   const currentWorks = useMemo(() => {
-    const works = activeTab === 'draft' ? draftWorks : publishedWorks;
+    const works = activeTab === 'draft' ? draftList : publishedWorks;
     let result = works;
 
     if (searchKeyword) {
@@ -106,7 +131,7 @@ const WorksPage: React.FC = () => {
           onClick={() => handleTabChange('draft')}
         >
           <Text className={styles.tabText}>草稿</Text>
-          <Text className={styles.tabCount}>{draftWorks.length}</Text>
+          <Text className={styles.tabCount}>{draftList.length}</Text>
         </View>
         <View
           className={classNames(styles.tabItem, activeTab === 'published' && styles.active)}
@@ -119,7 +144,7 @@ const WorksPage: React.FC = () => {
 
       <View className={styles.statsBar}>
         <View className={styles.statCard}>
-          <Text className={styles.statValue}>{draftWorks.length + publishedWorks.length}</Text>
+          <Text className={styles.statValue}>{draftList.length + publishedWorks.length}</Text>
           <Text className={styles.statLabel}>作品总数</Text>
         </View>
         <View className={styles.statCard}>
