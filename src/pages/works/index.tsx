@@ -71,8 +71,13 @@ const WorksPage: React.FC = () => {
     setSearchKeyword(e.detail.value);
   };
 
-  const handleWorkClick = (work: Work) => {
+  const handleWorkClick = async (work: Work) => {
     console.log('[Works] 点击作品:', work.id);
+    try {
+      await Taro.setStorage({ key: 'current_edit_work_id', data: work.id });
+    } catch (e) {
+      console.error('[Works] 存储作品ID失败:', e);
+    }
     Taro.switchTab({
       url: '/pages/canvas/index'
     });

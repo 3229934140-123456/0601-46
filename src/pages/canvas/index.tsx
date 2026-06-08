@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, Image, ScrollView } from '@tarojs/components';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { View, Text, Image, ScrollView, Input } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import classNames from 'classnames';
 import styles from './index.module.scss';
@@ -29,99 +29,135 @@ interface Layer {
   cropScale?: number;
 }
 
+interface HistoryState {
+  layers: Layer[];
+  selectedElementId: string | null;
+  layerCounter: number;
+}
+
+const defaultLayers: Layer[] = [
+  {
+    id: 'bg1',
+    name: '背景图',
+    type: 'image',
+    x: 50,
+    y: 50,
+    width: 100,
+    height: 100,
+    content: 'https://picsum.photos/id/1025/600/800',
+    opacity: 1,
+    rotation: 0,
+    shadow: false,
+    visible: true,
+    locked: true,
+    zIndex: 0,
+    cropX: 0,
+    cropY: 0,
+    cropScale: 1
+  },
+  {
+    id: 'text1',
+    name: '主标题',
+    type: 'text',
+    x: 50,
+    y: 25,
+    width: 80,
+    height: 12,
+    content: '618 大促狂欢',
+    fontSize: 36,
+    color: '#ffffff',
+    fontFamily: 'default',
+    textAlign: 'center',
+    opacity: 1,
+    rotation: 0,
+    shadow: true,
+    visible: true,
+    locked: false,
+    zIndex: 2
+  },
+  {
+    id: 'text2',
+    name: '副标题',
+    type: 'text',
+    x: 50,
+    y: 38,
+    width: 70,
+    height: 8,
+    content: '全场5折起 · 限时抢购',
+    fontSize: 18,
+    color: '#ffffff',
+    fontFamily: 'default',
+    textAlign: 'center',
+    opacity: 0.9,
+    rotation: 0,
+    shadow: true,
+    visible: true,
+    locked: false,
+    zIndex: 1
+  },
+  {
+    id: 'sticker1',
+    name: '装饰贴纸',
+    type: 'sticker',
+    x: 80,
+    y: 15,
+    width: 15,
+    height: 15,
+    content: '🎊',
+    opacity: 1,
+    rotation: 15,
+    shadow: false,
+    visible: true,
+    locked: false,
+    zIndex: 3
+  }
+];
+
 const CanvasPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('add');
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [canUndo, setCanUndo] = useState(true);
-  const [canRedo, setCanRedo] = useState(false);
   const [showMaterialPicker, setShowMaterialPicker] = useState(false);
   const [pickerType, setPickerType] = useState<'image' | 'sticker'>('image');
   const [pickerMode, setPickerMode] = useState<'add' | 'replace'>('add');
   const [showCropModal, setShowCropModal] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState(0);
   const [brandFont, setBrandFont] = useState('default');
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [editingTextValue, setEditingTextValue] = useState('');
   const layerCounterRef = useRef(10);
 
-  const [layers, setLayers] = useState<Layer[]>([
-    {
-      id: 'bg1',
-      name: '背景图',
-      type: 'image',
-      x: 50,
-      y: 50,
-      width: 100,
-      height: 100,
-      content: 'https://picsum.photos/id/1025/600/800',
-      opacity: 1,
-      rotation: 0,
-      shadow: false,
-      visible: true,
-      locked: true,
-      zIndex: 0,
-      cropX: 0,
-      cropY: 0,
-      cropScale: 1
-    },
-    {
-      id: 'text1',
-      name: '主标题',
-      type: 'text',
-      x: 50,
-      y: 25,
-      width: 80,
-      height: 12,
-      content: '618 大促狂欢',
-      fontSize: 36,
-      color: '#ffffff',
-      fontFamily: 'default',
-      textAlign: 'center',
-      opacity: 1,
-      rotation: 0,
-      shadow: true,
-      visible: true,
-      locked: false,
-      zIndex: 2
-    },
-    {
-      id: 'text2',
-      name: '副标题',
-      type: 'text',
-      x: 50,
-      y: 38,
-      width: 70,
-      height: 8,
-      content: '全场5折起 · 限时抢购',
-      fontSize: 18,
-      color: '#ffffff',
-      fontFamily: 'default',
-      textAlign: 'center',
-      opacity: 0.9,
-      rotation: 0,
-      shadow: true,
-      visible: true,
-      locked: false,
-      zIndex: 1
-    },
-    {
-      id: 'sticker1',
-      name: '装饰贴纸',
-      type: 'sticker',
-      x: 80,
-      y: 15,
-      width: 15,
-      height: 15,
-      content: '🎊',
-      opacity: 1,
-      rotation: 15,
-      shadow: false,
-      visible: true,
-      locked: false,
-      zIndex: 3
+  const historyStackRef = useRef<HistoryState[]>([]);
+  const historyIndexRef = useRef(-1);
+  const isRestoringRef = useRef(false);
+
+  const [layers, setLayers] = useState<Layer[]>([...defaultLayers]);
+
+  useEffect(() => {
+    loadWorkFromStorage();
+  }, []);
+
+  const loadWorkFromStorage = async () => {
+    try {
+      const res = await Taro.getStorage({ key: 'current_edit_work_id' }).catch(() => ({ data: null }));
+      const workId = res.data;
+
+      if (workId) {
+        await loadDraftWork(workId);
+        await Taro.removeStorage({ key: 'current_edit_work_id' }).catch(() => {});
+      } else {
+        saveToHistory();
+      }
+    } catch (e) {
+      console.error('[Canvas] 加载作品失败:', e);
+      saveToHistory();
     }
-  ]);
+  };
 
   const selectedLayer = layers.find(l => l.id === selectedElementId);
   const isLayerLocked = selectedLayer?.locked || false;
+
+  const canUndo = historyIndexRef.current > 0;
+  const canRedo = historyIndexRef.current < historyStackRef.current.length - 1;
 
   const sortedLayers = useMemo(() =>
     [...layers].sort((a, b) => b.zIndex - a.zIndex),
@@ -155,26 +191,85 @@ const CanvasPage: React.FC = () => {
 
   const stickerEmojis = ['🎊', '🎉', '✨', '⭐', '💫', '🌟', '🎈', '🎁', '💎', '🌸', '🌺', '🌻'];
 
+  const saveToHistory = () => {
+    if (isRestoringRef.current) return;
+
+    const state: HistoryState = {
+      layers: JSON.parse(JSON.stringify(layers)),
+      selectedElementId,
+      layerCounter: layerCounterRef.current
+    };
+
+    if (historyIndexRef.current < historyStackRef.current.length - 1) {
+      historyStackRef.current = historyStackRef.current.slice(0, historyIndexRef.current + 1);
+    }
+
+    historyStackRef.current.push(state);
+    historyIndexRef.current = historyStackRef.current.length - 1;
+
+    if (historyStackRef.current.length > 50) {
+      historyStackRef.current.shift();
+      historyIndexRef.current -= 1;
+    }
+  };
+
+  const restoreFromHistory = (index: number) => {
+    if (index < 0 || index >= historyStackRef.current.length) return;
+
+    isRestoringRef.current = true;
+    const state = historyStackRef.current[index];
+    setLayers(JSON.parse(JSON.stringify(state.layers)));
+    setSelectedElementId(state.selectedElementId);
+    layerCounterRef.current = state.layerCounter;
+    historyIndexRef.current = index;
+    isRestoringRef.current = false;
+  };
+
+  const handleUndo = () => {
+    if (!canUndo) return;
+    restoreFromHistory(historyIndexRef.current - 1);
+  };
+
+  const handleRedo = () => {
+    if (!canRedo) return;
+    restoreFromHistory(historyIndexRef.current + 1);
+  };
+
   const getNewLayerId = () => {
     const newId = `layer_${layerCounterRef.current}`;
     layerCounterRef.current += 1;
     return newId;
   };
 
-  const handleUndo = () => {
-    console.log('[Canvas] 撤销');
-    setCanUndo(false);
-    setCanRedo(true);
-  };
+  const loadDraftWork = async (workId: string) => {
+    try {
+      const storageKey = 'draft_works';
+      const res = await Taro.getStorage({ key: storageKey }).catch(() => ({ data: [] }));
+      const works = res.data || [];
+      const work = works.find((w: any) => w.id === workId);
 
-  const handleRedo = () => {
-    console.log('[Canvas] 重做');
-    setCanUndo(true);
-    setCanRedo(false);
+      if (work && work.canvasData) {
+        isRestoringRef.current = true;
+        setLayers(work.canvasData.layers || [...defaultLayers]);
+        layerCounterRef.current = work.canvasData.layerCounter || 10;
+        setSelectedElementId(null);
+        isRestoringRef.current = false;
+        saveToHistory();
+      }
+    } catch (e) {
+      console.error('[Canvas] 加载草稿失败:', e);
+    }
   };
 
   const handleSave = () => {
     console.log('[Canvas] 保存草稿');
+
+    const canvasData = {
+      layers: JSON.parse(JSON.stringify(layers)),
+      layerCounter: layerCounterRef.current,
+      selectedElementId
+    };
+
     const workData = {
       id: 'work_' + Date.now(),
       title: '618活动主视觉',
@@ -182,13 +277,14 @@ const CanvasPage: React.FC = () => {
       status: 'draft',
       size: '750×1334',
       updatedAt: new Date().toLocaleString('zh-CN'),
-      createdAt: new Date().toLocaleString('zh-CN')
+      createdAt: new Date().toLocaleString('zh-CN'),
+      canvasData
     };
 
     try {
-      const savedWorks = Taro.getStorageSync('draftWorks') || [];
+      const savedWorks = Taro.getStorageSync('draft_works') || [];
       savedWorks.unshift(workData);
-      Taro.setStorageSync('draftWorks', savedWorks);
+      Taro.setStorageSync('draft_works', savedWorks);
     } catch (e) {
       console.error('[Canvas] 保存失败:', e);
     }
@@ -208,18 +304,54 @@ const CanvasPage: React.FC = () => {
 
   const handleElementClick = (layerId: string) => {
     const layer = layers.find(l => l.id === layerId);
-    if (layer?.locked && layer.id !== 'bg1') {
+    if (!layer || !layer.visible) return;
+
+    if (layer.locked && layer.id !== 'bg1') {
       Taro.showToast({
         title: '该元素已锁定',
         icon: 'none'
       });
       return;
     }
+
+    if (editingTextId && editingTextId !== layerId) {
+      setEditingTextId(null);
+    }
+
     setSelectedElementId(layerId);
   };
 
   const handleCanvasClick = () => {
     setSelectedElementId(null);
+    setEditingTextId(null);
+  };
+
+  const handleTextDoubleClick = (layer: Layer) => {
+    if (layer.locked) return;
+    setEditingTextId(layer.id);
+    setEditingTextValue(layer.content);
+  };
+
+  const handleTextContentChange = (value: string) => {
+    setEditingTextValue(value);
+  };
+
+  const handleTextContentConfirm = () => {
+    if (!editingTextId) return;
+
+    const newContent = editingTextValue || '文字';
+    const shortName = newContent.slice(0, 8) + (newContent.length > 8 ? '...' : '');
+
+    setLayers(prev =>
+      prev.map(l =>
+        l.id === editingTextId
+          ? { ...l, content: newContent, name: shortName }
+          : l
+      )
+    );
+
+    setEditingTextId(null);
+    saveToHistory();
   };
 
   const handleColorChange = (color: string) => {
@@ -229,6 +361,7 @@ const CanvasPage: React.FC = () => {
         l.id === selectedElementId ? { ...l, color } : l
       )
     );
+    saveToHistory();
   };
 
   const handleOpacityChange = (opacity: number) => {
@@ -240,6 +373,11 @@ const CanvasPage: React.FC = () => {
     );
   };
 
+  const handleOpacityChangeEnd = () => {
+    if (!selectedElementId || isLayerLocked) return;
+    saveToHistory();
+  };
+
   const handleToggleShadow = () => {
     if (!selectedElementId || isLayerLocked) return;
     setLayers(prev =>
@@ -247,6 +385,7 @@ const CanvasPage: React.FC = () => {
         l.id === selectedElementId ? { ...l, shadow: !l.shadow } : l
       )
     );
+    saveToHistory();
   };
 
   const handleTextAlignChange = (align: 'left' | 'center' | 'right') => {
@@ -256,6 +395,7 @@ const CanvasPage: React.FC = () => {
         l.id === selectedElementId ? { ...l, textAlign: align } : l
       )
     );
+    saveToHistory();
   };
 
   const handleFontChange = (fontId: string) => {
@@ -266,6 +406,7 @@ const CanvasPage: React.FC = () => {
       )
     );
     setBrandFont(fontId);
+    saveToHistory();
   };
 
   const handleToggleVisibility = (layerId: string) => {
@@ -274,6 +415,7 @@ const CanvasPage: React.FC = () => {
         l.id === layerId ? { ...l, visible: !l.visible } : l
       )
     );
+    saveToHistory();
   };
 
   const handleToggleLock = (layerId: string) => {
@@ -286,30 +428,38 @@ const CanvasPage: React.FC = () => {
         l.id === layerId ? { ...l, locked: !l.locked } : l
       )
     );
+    saveToHistory();
   };
 
   const handleMoveLayer = (layerId: string, direction: 'up' | 'down') => {
-    const sorted = [...layers].sort((a, b) => b.zIndex - a.zIndex);
-    const currentIndex = sorted.findIndex(l => l.id === layerId);
+    const layer = layers.find(l => l.id === layerId);
+    if (layer?.locked) {
+      Taro.showToast({ title: '锁定图层不能移动层级', icon: 'none' });
+      return;
+    }
+
+    const unsorted = layers.filter(l => !l.locked).sort((a, b) => b.zIndex - a.zIndex);
+    const currentIndex = unsorted.findIndex(l => l.id === layerId);
     if (currentIndex === -1) return;
 
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+    if (targetIndex < 0 || targetIndex >= unsorted.length) return;
 
-    const targetLayer = sorted[targetIndex];
+    const targetLayer = unsorted[targetIndex];
     if (!targetLayer) return;
 
     setLayers(prev => {
-      const newLayers = prev.map(l => {
-        const current = prev.find(ll => ll.id === layerId);
-        const target = prev.find(ll => ll.id === targetLayer.id);
-        if (!current || !target) return l;
+      const current = prev.find(ll => ll.id === layerId);
+      const target = prev.find(ll => ll.id === targetLayer.id);
+      if (!current || !target) return prev;
+
+      return prev.map(l => {
         if (l.id === layerId) return { ...l, zIndex: target.zIndex };
         if (l.id === targetLayer.id) return { ...l, zIndex: current.zIndex };
         return l;
       });
-      return newLayers;
     });
+    saveToHistory();
   };
 
   const handleDeleteLayer = (layerId: string) => {
@@ -326,6 +476,7 @@ const CanvasPage: React.FC = () => {
     if (selectedElementId === layerId) {
       setSelectedElementId(null);
     }
+    saveToHistory();
   };
 
   const handleApplyBrand = (brandIndex: number) => {
@@ -340,6 +491,7 @@ const CanvasPage: React.FC = () => {
         return l;
       })
     );
+    saveToHistory();
 
     Taro.showToast({
       title: '已应用品牌风格',
@@ -355,6 +507,7 @@ const CanvasPage: React.FC = () => {
           l.id === selectedElementId ? { ...l, fontFamily: fontId } : l
         )
       );
+      saveToHistory();
     }
   };
 
@@ -383,6 +536,7 @@ const CanvasPage: React.FC = () => {
     setLayers(prev => [...prev, newLayer]);
     setSelectedElementId(newId);
     setActiveTab('properties');
+    saveToHistory();
   };
 
   const handleAddSticker = () => {
@@ -420,6 +574,7 @@ const CanvasPage: React.FC = () => {
     setSelectedElementId(newId);
     setShowMaterialPicker(false);
     setActiveTab('properties');
+    saveToHistory();
   };
 
   const handleSelectImage = (imageUrl: string) => {
@@ -448,6 +603,7 @@ const CanvasPage: React.FC = () => {
     setSelectedElementId(newId);
     setShowMaterialPicker(false);
     setActiveTab('properties');
+    saveToHistory();
   };
 
   const handleReplaceImage = () => {
@@ -467,6 +623,7 @@ const CanvasPage: React.FC = () => {
       )
     );
     setShowMaterialPicker(false);
+    saveToHistory();
     Taro.showToast({
       title: '图片已替换',
       icon: 'success'
@@ -525,6 +682,7 @@ const CanvasPage: React.FC = () => {
 
   const handleCropConfirm = () => {
     setShowCropModal(false);
+    saveToHistory();
     Taro.showToast({
       title: '裁剪完成',
       icon: 'success'
@@ -553,6 +711,7 @@ const CanvasPage: React.FC = () => {
     setLayers(prev => [...prev, newLayer]);
     setSelectedElementId(newId);
     setActiveTab('properties');
+    saveToHistory();
   };
 
   const handlePreview = () => {
@@ -563,10 +722,122 @@ const CanvasPage: React.FC = () => {
     });
   };
 
+  const dragStartPos = useRef<{ x: number; y: number; layerX: number; layerY: number } | null>(null);
+  const resizeStartPos = useRef<{ x: number; y: number; width: number; height: number; layerX: number; layerY: number } | null>(null);
+  const resizeHandleType = useRef<string>('');
+  const isDraggingRef = useRef(false);
+  const isResizingRef = useRef(false);
+
+  const handleTouchStart = (e: any, layer: Layer) => {
+    if (layer.locked || !layer.visible) return;
+    e.stopPropagation();
+
+    const touch = e.touches?.[0] || e;
+    const canvasRect = (e.currentTarget?.closest?.('.' + styles.canvasArea) || {});
+
+    isDraggingRef.current = true;
+    dragStartPos.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      layerX: layer.x,
+      layerY: layer.y
+    };
+
+    setSelectedElementId(layer.id);
+  };
+
+  const handleTouchMove = (e: any) => {
+    if (isResizingRef.current && selectedElementId && resizeStartPos.current && resizeHandleType.current) {
+      const touch = e.touches?.[0] || e;
+      const start = resizeStartPos.current;
+      const handle = resizeHandleType.current;
+
+      const dx = (touch.clientX - start.x) / 300 * 50;
+      const dy = (touch.clientY - start.y) / 400 * 50;
+
+      setLayers(prev =>
+        prev.map(l => {
+          if (l.id !== selectedElementId) return l;
+
+          let newWidth = start.width;
+          let newHeight = start.height;
+          let newX = start.layerX;
+          let newY = start.layerY;
+
+          if (handle.includes('right')) {
+            newWidth = Math.max(10, start.width + dx * 2);
+          }
+          if (handle.includes('left')) {
+            newWidth = Math.max(10, start.width - dx * 2);
+            newX = start.layerX + dx;
+          }
+          if (handle.includes('bottom')) {
+            newHeight = Math.max(10, start.height + dy * 2);
+          }
+          if (handle.includes('top')) {
+            newHeight = Math.max(10, start.height - dy * 2);
+            newY = start.layerY + dy;
+          }
+
+          return { ...l, width: newWidth, height: newHeight, x: newX, y: newY };
+        })
+      );
+      return;
+    }
+
+    if (isDraggingRef.current && selectedElementId && dragStartPos.current) {
+      const touch = e.touches?.[0] || e;
+      const start = dragStartPos.current;
+
+      const dx = (touch.clientX - start.x) / 300 * 50;
+      const dy = (touch.clientY - start.y) / 400 * 50;
+
+      const newX = Math.max(0, Math.min(100, start.layerX + dx));
+      const newY = Math.max(0, Math.min(100, start.layerY + dy));
+
+      setLayers(prev =>
+        prev.map(l =>
+          l.id === selectedElementId ? { ...l, x: newX, y: newY } : l
+        )
+      );
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isDraggingRef.current || isResizingRef.current) {
+      saveToHistory();
+    }
+    isDraggingRef.current = false;
+    isResizingRef.current = false;
+    dragStartPos.current = null;
+    resizeStartPos.current = null;
+    resizeHandleType.current = '';
+  };
+
+  const handleResizeStart = (e: any, layer: Layer, handleType: string) => {
+    if (layer.locked || !layer.visible) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const touch = e.touches?.[0] || e;
+
+    isResizingRef.current = true;
+    resizeStartPos.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      width: layer.width,
+      height: layer.height,
+      layerX: layer.x,
+      layerY: layer.y
+    };
+    resizeHandleType.current = handleType;
+  };
+
   const renderCanvasElement = (layer: Layer) => {
     if (!layer.visible) return null;
 
     const isSelected = layer.id === selectedElementId;
+    const isEditing = layer.id === editingTextId && layer.type === 'text';
 
     const getTextAlignStyle = () => {
       if (layer.textAlign === 'left') return 'flex-start';
@@ -594,27 +865,53 @@ const CanvasPage: React.FC = () => {
           opacity: layer.opacity,
           justifyContent: layer.type === 'text' ? getTextAlignStyle() : 'center',
           alignItems: 'center',
-          display: 'flex'
+          display: 'flex',
+          touchAction: 'none'
         }}
+        onTouchStart={(e) => handleTouchStart(e, layer)}
         onClick={(e) => {
           e.stopPropagation();
           handleElementClick(layer.id);
         }}
+        onDoubleClick={() => {
+          if (layer.type === 'text') {
+            handleTextDoubleClick(layer);
+          }
+        }}
       >
         {layer.type === 'text' && (
-          <Text
-            className={styles.elementText}
-            style={{
-              fontSize: `${layer.fontSize}rpx`,
-              color: layer.color,
-              textShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.3)' : 'none',
-              fontFamily: layer.fontFamily,
-              textAlign: layer.textAlign,
-              width: '100%'
-            }}
-          >
-            {layer.content}
-          </Text>
+          isEditing ? (
+            <Input
+              className={styles.elementTextInput}
+              value={editingTextValue}
+              onInput={(e) => handleTextContentChange(e.detail.value)}
+              onBlur={handleTextContentConfirm}
+              onConfirm={handleTextContentConfirm}
+              autoFocus
+              style={{
+                fontSize: `${layer.fontSize}rpx`,
+                color: layer.color,
+                textShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.3)' : 'none',
+                fontFamily: layer.fontFamily,
+                textAlign: layer.textAlign,
+                width: '100%'
+              }}
+            />
+          ) : (
+            <Text
+              className={styles.elementText}
+              style={{
+                fontSize: `${layer.fontSize}rpx`,
+                color: layer.color,
+                textShadow: layer.shadow ? '0 4rpx 12rpx rgba(0,0,0,0.3)' : 'none',
+                fontFamily: layer.fontFamily,
+                textAlign: layer.textAlign,
+                width: '100%'
+              }}
+            >
+              {layer.content}
+            </Text>
+          )
         )}
         {layer.type === 'image' && (
           <View className={styles.imageContainer}>
@@ -647,10 +944,26 @@ const CanvasPage: React.FC = () => {
         )}
         {isSelected && !layer.locked && (
           <>
-            <View className={classNames(styles.resizeHandle, styles.topLeft)} />
-            <View className={classNames(styles.resizeHandle, styles.topRight)} />
-            <View className={classNames(styles.resizeHandle, styles.bottomLeft)} />
-            <View className={classNames(styles.resizeHandle, styles.bottomRight)} />
+            <View
+              className={classNames(styles.resizeHandle, styles.topLeft)}
+              onTouchStart={(e) => handleResizeStart(e, layer, 'topLeft')}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <View
+              className={classNames(styles.resizeHandle, styles.topRight)}
+              onTouchStart={(e) => handleResizeStart(e, layer, 'topRight')}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <View
+              className={classNames(styles.resizeHandle, styles.bottomLeft)}
+              onTouchStart={(e) => handleResizeStart(e, layer, 'bottomLeft')}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <View
+              className={classNames(styles.resizeHandle, styles.bottomRight)}
+              onTouchStart={(e) => handleResizeStart(e, layer, 'bottomRight')}
+              onClick={(e) => e.stopPropagation()}
+            />
           </>
         )}
         {isSelected && layer.locked && (
@@ -680,6 +993,40 @@ const CanvasPage: React.FC = () => {
         {isLocked && (
           <View className={styles.lockedNotice}>
             <Text className={styles.lockedNoticeText}>🔒 该元素已锁定，无法编辑</Text>
+          </View>
+        )}
+
+        {isTextType && (
+          <View className={styles.panelSection}>
+            <Text className={styles.panelTitle}>文字内容</Text>
+            <View className={styles.textEditorRow}>
+              <Input
+                className={styles.textEditorInput}
+                value={selectedLayer.content}
+                onInput={(e) => {
+                  if (!isLocked) {
+                    setLayers(prev =>
+                      prev.map(l =>
+                        l.id === selectedElementId ? { ...l, content: e.detail.value } : l
+                      )
+                    );
+                  }
+                }}
+                onBlur={() => {
+                  if (!isLocked) {
+                    const shortName = selectedLayer.content.slice(0, 8) + (selectedLayer.content.length > 8 ? '...' : '');
+                    setLayers(prev =>
+                      prev.map(l =>
+                        l.id === selectedElementId ? { ...l, name: shortName } : l
+                      )
+                    );
+                    saveToHistory();
+                  }
+                }}
+                placeholder="输入文字内容"
+                disabled={isLocked}
+              />
+            </View>
           </View>
         )}
 
@@ -719,13 +1066,19 @@ const CanvasPage: React.FC = () => {
             <View className={styles.adjustButtons}>
               <View
                 className={styles.adjustBtn}
-                onClick={() => handleOpacityChange(Math.max(0, selectedLayer.opacity - 0.1))}
+                onClick={() => {
+                  handleOpacityChange(Math.max(0, selectedLayer.opacity - 0.1));
+                  handleOpacityChangeEnd();
+                }}
               >
                 <Text>-10%</Text>
               </View>
               <View
                 className={styles.adjustBtn}
-                onClick={() => handleOpacityChange(Math.min(1, selectedLayer.opacity + 0.1))}
+                onClick={() => {
+                  handleOpacityChange(Math.min(1, selectedLayer.opacity + 0.1));
+                  handleOpacityChangeEnd();
+                }}
               >
                 <Text>+10%</Text>
               </View>
@@ -860,13 +1213,13 @@ const CanvasPage: React.FC = () => {
               <Text>{layer.locked ? '🔒' : '🔓'}</Text>
             </View>
             <View
-              className={styles.layerAction}
+              className={classNames(styles.layerAction, layer.locked && styles.disabledAction)}
               onClick={(e) => { e.stopPropagation(); handleMoveLayer(layer.id, 'up'); }}
             >
               <Text>↑</Text>
             </View>
             <View
-              className={styles.layerAction}
+              className={classNames(styles.layerAction, layer.locked && styles.disabledAction)}
               onClick={(e) => { e.stopPropagation(); handleMoveLayer(layer.id, 'down'); }}
             >
               <Text>↓</Text>
@@ -1155,7 +1508,13 @@ const CanvasPage: React.FC = () => {
         </View>
       </View>
 
-      <View className={styles.canvasArea} onClick={handleCanvasClick}>
+      <View
+        className={styles.canvasArea}
+        onClick={handleCanvasClick}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
         <View className={styles.canvasContainer}>
           {sortedLayers.map(layer => renderCanvasElement(layer))}
         </View>

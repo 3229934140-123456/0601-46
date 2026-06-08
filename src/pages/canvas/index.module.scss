@@ -773,3 +773,38 @@
 .layerHidden .layerName {
   text-decoration: line-through;
 }
+
+.textEditorRow {
+  margin-top: $spacing-sm;
+}
+
+.textEditorInput {
+  width: 100%;
+  height: 72rpx;
+  padding: 0 $spacing-md;
+  background: $color-bg-gray;
+  border-radius: $radius-md;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+}
+
+.elementTextInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.disabledAction {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.topBtn {
+  &.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+}
