@@ -1,0 +1,214 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding-bottom: 120rpx;
+}
+
+.header {
+  padding: 80rpx $page-padding $spacing-xl;
+  background: $gradient-hero;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -100rpx;
+    right: -50rpx;
+    width: 300rpx;
+    height: 300rpx;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -80rpx;
+    left: -40rpx;
+    width: 240rpx;
+    height: 240rpx;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+  }
+}
+
+.welcome {
+  position: relative;
+  z-index: 1;
+}
+
+.welcomeTitle {
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+  margin-bottom: $spacing-xs;
+}
+
+.welcomeSubtitle {
+  font-size: $font-size-sm;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: $spacing-lg;
+}
+
+.searchBar {
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 40rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  padding: 0 $spacing-lg;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.searchIcon {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: $spacing-sm;
+  opacity: 0.5;
+}
+
+.searchInput {
+  flex: 1;
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.placeholderText {
+  color: $color-text-tertiary;
+  font-size: $font-size-md;
+}
+
+.section {
+  padding: 0 $page-padding;
+  margin-top: $spacing-lg;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+}
+
+.sectionTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.moreBtn {
+  font-size: $font-size-sm;
+  color: $color-primary;
+}
+
+.categoryScroll {
+  white-space: nowrap;
+  padding: 0 $page-padding;
+  margin-top: -$spacing-sm;
+}
+
+.categoryList {
+  @include scroll-x-container;
+  padding: $spacing-sm 0;
+}
+
+.categoryItem {
+  @include scroll-x-item(auto);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 64rpx;
+  padding: 0 $spacing-lg;
+  border-radius: 32rpx;
+  margin-right: $spacing-sm;
+  background: $color-bg-card;
+  transition: all $transition-fast;
+
+  &.active {
+    background: $color-primary;
+
+    .categoryText {
+      color: $color-text-white;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.categoryText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  white-space: nowrap;
+}
+
+.sizeFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  padding: $spacing-sm $page-padding 0;
+}
+
+.sizeItem {
+  padding: 10rpx 24rpx;
+  border-radius: 24rpx;
+  background: $color-bg-card;
+  border: 2rpx solid $color-border;
+  transition: all $transition-fast;
+
+  &.active {
+    border-color: $color-primary;
+    background: $color-primary-bg;
+
+    .sizeText {
+      color: $color-primary;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+.sizeText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.templateGrid {
+  padding: $spacing-sm $page-padding $spacing-xl;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+}
+
+.templateCol {
+  width: calc(50% - 12rpx);
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.loading {
+  padding: $spacing-xl;
+  text-align: center;
+}
+
+.loadingText {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.empty {
+  padding: 120rpx 0;
+  text-align: center;
+}
+
+.emptyText {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+  margin-top: $spacing-md;
+}

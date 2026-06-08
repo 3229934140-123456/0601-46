@@ -1,0 +1,43 @@
+// ============================================
+// 主题配色变量
+// ============================================
+
+// 品牌主题色：创意紫
+$color-primary: #7B61FF;
+$color-primary-light: #9B85FF;
+$color-primary-dark: #5A45E0;
+$color-primary-bg: rgba(123, 97, 255, 0.1);
+
+// 辅助色
+$color-secondary: #FF6B9D;
+$color-secondary-light: #FF8FB3;
+$color-accent: #30D158;
+
+// 功能色
+$color-success: #30D158;
+$color-warning: #FF9F0A;
+$color-error: #FF453A;
+$color-info: #7B61FF;
+
+// 背景色
+$color-bg-page: #F7F8FA;
+$color-bg-card: #FFFFFF;
+$color-bg-hover: #F2F3F5;
+$color-bg-gray: #EEEFF2;
+
+// 文本色
+$color-text-primary: #1D2129;
+$color-text-secondary: #4E5969;
+$color-text-tertiary: #86909C;
+$color-text-disabled: #C9CDD4;
+$color-text-white: #FFFFFF;
+
+// 边框色
+$color-border: #E5E6EB;
+$color-divider: #F2F3F5;
+$color-border-light: #F0F1F5;
+
+// 渐变
+$gradient-primary: linear-gradient(135deg, #7B61FF 0%, #9B85FF 100%);
+$gradient-secondary: linear-gradient(135deg, #FF6B9D 0%, #FF8FB3 100%);
+$gradient-hero: linear-gradient(135deg, #7B61FF 0%, #FF6B9D 100%);

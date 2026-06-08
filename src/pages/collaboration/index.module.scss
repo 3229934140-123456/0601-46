@@ -1,0 +1,265 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding-bottom: 120rpx;
+}
+
+.workHeader {
+  background: $color-bg-card;
+  padding: $spacing-lg $page-padding;
+  display: flex;
+  align-items: center;
+  border-bottom: 1rpx solid $color-divider;
+}
+
+.workCover {
+  width: 120rpx;
+  height: 160rpx;
+  border-radius: $radius-md;
+  overflow: hidden;
+  margin-right: $spacing-md;
+  background: $color-bg-gray;
+}
+
+.workCoverImg {
+  width: 100%;
+  height: 100%;
+}
+
+.workInfo {
+  flex: 1;
+}
+
+.workTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.workMeta {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.inviteBtn {
+  padding: 12rpx 24rpx;
+  background: $color-primary-bg;
+  border-radius: 32rpx;
+}
+
+.inviteBtnText {
+  font-size: $font-size-sm;
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+}
+
+.tabBar {
+  display: flex;
+  background: $color-bg-card;
+  border-bottom: 1rpx solid $color-divider;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tabItem {
+  flex: 1;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+
+  &.active {
+    .tabText {
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 48rpx;
+      height: 6rpx;
+      background: $color-primary;
+      border-radius: 3rpx;
+    }
+  }
+}
+
+.tabText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+}
+
+.commentList {
+  padding: $spacing-md $page-padding;
+}
+
+.commentItem {
+  display: flex;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.commentAvatar {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: $spacing-md;
+  flex-shrink: 0;
+  background: $color-bg-gray;
+}
+
+.commentAvatarImg {
+  width: 100%;
+  height: 100%;
+}
+
+.commentContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.commentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.commenterName {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.commentTime {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.commentText {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  line-height: 1.5;
+}
+
+.commentPosition {
+  display: inline-flex;
+  align-items: center;
+  margin-top: $spacing-sm;
+  padding: 6rpx 12rpx;
+  background: $color-bg-gray;
+  border-radius: $radius-xs;
+}
+
+.positionText {
+  font-size: 20rpx;
+  color: $color-text-tertiary;
+}
+
+.replyBtn {
+  margin-top: $spacing-sm;
+  font-size: $font-size-sm;
+  color: $color-primary;
+}
+
+.historyList {
+  padding: $spacing-md $page-padding;
+}
+
+.historyItem {
+  display: flex;
+  padding: $spacing-md 0;
+  border-bottom: 1rpx solid $color-divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.historyDot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: $color-primary;
+  margin-top: 10rpx;
+  margin-right: $spacing-md;
+  flex-shrink: 0;
+}
+
+.historyContent {
+  flex: 1;
+}
+
+.historyText {
+  font-size: $font-size-md;
+  color: $color-text-primary;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.historyUser {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.historyTime {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.bottomBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: $color-bg-card;
+  padding: $spacing-md $page-padding;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-md});
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.inputArea {
+  flex: 1;
+  height: 72rpx;
+  background: $color-bg-gray;
+  border-radius: 36rpx;
+  padding: 0 $spacing-lg;
+  display: flex;
+  align-items: center;
+}
+
+.inputPlaceholder {
+  font-size: $font-size-md;
+  color: $color-text-tertiary;
+}
+
+.sendBtn {
+  width: 80rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $gradient-primary;
+  border-radius: 36rpx;
+  font-size: 28rpx;
+  color: #fff;
+}

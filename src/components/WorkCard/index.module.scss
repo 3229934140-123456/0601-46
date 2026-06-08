@@ -1,0 +1,94 @@
+@use '@/styles/variables.scss' as *;
+
+.card {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.imageWrap {
+  position: relative;
+  width: 100%;
+  background: $color-bg-gray;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.statusBadge {
+  position: absolute;
+  top: $spacing-sm;
+  left: $spacing-sm;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 6rpx 16rpx;
+  border-radius: $radius-xs;
+  z-index: 2;
+}
+
+.statusText {
+  font-size: 20rpx;
+  color: $color-text-white;
+
+  &.published {
+    color: $color-success;
+  }
+}
+
+.moreBtn {
+  position: absolute;
+  top: $spacing-sm;
+  right: $spacing-sm;
+  width: 48rpx;
+  height: 48rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.moreIcon {
+  font-size: 32rpx;
+  color: $color-text-primary;
+  line-height: 1;
+}
+
+.info {
+  padding: $spacing-md;
+}
+
+.title {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  display: block;
+  @include text-ellipsis;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-sm;
+}
+
+.size {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.time {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}

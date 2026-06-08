@@ -1,0 +1,200 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: $color-bg-page;
+  padding-bottom: 120rpx;
+}
+
+.section {
+  margin: $spacing-lg $page-padding;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  box-shadow: $shadow-card;
+}
+
+.sectionTitle {
+  padding: $spacing-md $spacing-lg;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  border-bottom: 1rpx solid $color-divider;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sectionTitleText {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.sectionAction {
+  font-size: $font-size-sm;
+  color: $color-primary;
+}
+
+.colorList {
+  padding: $spacing-lg;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-lg;
+}
+
+.colorItem {
+  width: calc(25% - 18rpx);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.colorSwatch {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  box-shadow: $shadow-card;
+  border: 4rpx solid #fff;
+  position: relative;
+
+  &.active {
+    &::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 32rpx;
+      font-weight: bold;
+      text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.3);
+    }
+  }
+}
+
+.colorName {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.colorHex {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.fontList {
+  padding: $spacing-md 0;
+}
+
+.fontItem {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md $spacing-lg;
+  transition: background $transition-fast;
+
+  &:active {
+    background: $color-bg-hover;
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1rpx solid $color-divider;
+  }
+}
+
+.fontPreview {
+  flex: 1;
+  font-size: 36rpx;
+  color: $color-text-primary;
+}
+
+.fontName {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  margin-right: $spacing-md;
+}
+
+.fontCheck {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: $color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24rpx;
+}
+
+.componentsGrid {
+  padding: $spacing-lg;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+}
+
+.componentCard {
+  width: calc(50% - 12rpx);
+  background: $color-bg-gray;
+  border-radius: $radius-md;
+  overflow: hidden;
+}
+
+.componentImg {
+  width: 100%;
+  height: 160rpx;
+  background: #fff;
+}
+
+.componentInfo {
+  padding: $spacing-sm $spacing-md;
+}
+
+.componentName {
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  @include text-ellipsis;
+  display: block;
+}
+
+.componentType {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+  font-size: $font-size-md;
+  color: $color-primary;
+  border-top: 1rpx solid $color-divider;
+}
+
+.bottomBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: $color-bg-card;
+  padding: $spacing-md $page-padding;
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$spacing-md});
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.applyBtn {
+  width: 100%;
+  height: 88rpx;
+  background: $gradient-primary;
+  border-radius: $radius-button;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  box-shadow: 0 4rpx 16rpx rgba(123, 97, 255, 0.4);
+}
