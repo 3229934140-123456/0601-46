@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { View, Text, Image, ScrollView, Input } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow, useDidHide } from '@tarojs/taro';
 import classNames from 'classnames';
 import styles from './index.module.scss';
 import { imageMaterials } from '@/data/materials';
@@ -123,35 +123,18 @@ const CanvasPage: React.FC = () => {
   const [selectedBrand, setSelectedBrand] = useState(0);
   const [brandFont, setBrandFont] = useState('default');
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [editingTextValue, setEditingTextValue] = useState('');
+  const [, forceUpdate] = useState(0);
+
   const layerCounterRef = useRef(10);
+  const layersRef = useRef<Layer[]>([...defaultLayers]);
+  const selectedIdRef = useRef<string | null>(null);
 
   const historyStackRef = useRef<HistoryState[]>([]);
   const historyIndexRef = useRef(-1);
   const isRestoringRef = useRef(false);
+  const isInitializedRef = useRef(false);
 
   const [layers, setLayers] = useState<Layer[]>([...defaultLayers]);
-
-  useEffect(() => {
-    loadWorkFromStorage();
-  }, []);
-
-  const loadWorkFromStorage = async () => {
-    try {
-      const res = await Taro.getStorage({ key: 'current_edit_work_id' }).catch(() => ({ data: null }));
-      const workId = res.data;
-
-      if (workId) {
-        await loadDraftWork(workId);
-        await Taro.removeStorage({ key: 'current_edit_work_id' }).catch(() => {});
-      } else {
-        saveToHistory();
-      }
-    } catch (e) {
-      console.error('[Canvas] 加载作品失败:', e);
-      saveToHistory();
-    }
-  };
 
   const selectedLayer = layers.find(l => l.id === selectedElementId);
   const isLayerLocked = selectedLayer?.locked || false;
@@ -191,17 +174,47 @@ const CanvasPage: React.FC = () => {
 
   const stickerEmojis = ['🎊', '🎉', '✨', '⭐', '💫', '🌟', '🎈', '🎁', '💎', '🌸', '🌺', '🌻'];
 
-  const saveToHistory = () => {
+  const dragStartRef = useRef<{
+    type: 'move' | 'resize' | null;
+    handle?: string;
+    startX: number;
+    startY: number;
+    layerX: number;
+    layerY: number;
+    layerW: number;
+    layerH: number;
+    layerId: string;
+  }>({ type: null, startX: 0, startY: 0, layerX: 0, layerY: 0, layerW: 0, layerH: 0, layerId: '' });
+
+  const resizeTouchActiveRef = useRef(false);
+
+  const updateLayers = useCallback((newLayers: Layer[]) => {
+    layersRef.current = newLayers;
+    setLayers(newLayers);
+  }, []);
+
+  const updateSelectedId = useCallback((id: string | null) => {
+    selectedIdRef.current = id;
+    setSelectedElementId(id);
+  }, []);
+
+  const saveToHistory = useCallback(() => {
     if (isRestoringRef.current) return;
+    if (!isInitializedRef.current) return;
 
     const state: HistoryState = {
-      layers: JSON.parse(JSON.stringify(layers)),
-      selectedElementId,
+      layers: JSON.parse(JSON.stringify(layersRef.current)),
+      selectedElementId: selectedIdRef.current,
       layerCounter: layerCounterRef.current
     };
 
     if (historyIndexRef.current < historyStackRef.current.length - 1) {
       historyStackRef.current = historyStackRef.current.slice(0, historyIndexRef.current + 1);
+    }
+
+    const lastState = historyStackRef.current[historyStackRef.current.length - 1];
+    if (lastState && JSON.stringify(lastState.layers) === JSON.stringify(state.layers)) {
+      return;
     }
 
     historyStackRef.current.push(state);
@@ -211,19 +224,32 @@ const CanvasPage: React.FC = () => {
       historyStackRef.current.shift();
       historyIndexRef.current -= 1;
     }
-  };
 
-  const restoreFromHistory = (index: number) => {
+    forceUpdate(n => n + 1);
+  }, []);
+
+  const restoreFromHistory = useCallback((index: number) => {
     if (index < 0 || index >= historyStackRef.current.length) return;
 
     isRestoringRef.current = true;
     const state = historyStackRef.current[index];
-    setLayers(JSON.parse(JSON.stringify(state.layers)));
-    setSelectedElementId(state.selectedElementId);
+    const newLayers = JSON.parse(JSON.stringify(state.layers));
+
+    layersRef.current = newLayers;
+    selectedIdRef.current = state.selectedElementId;
     layerCounterRef.current = state.layerCounter;
     historyIndexRef.current = index;
-    isRestoringRef.current = false;
-  };
+
+    setLayers(newLayers);
+    setSelectedElementId(state.selectedElementId);
+    setEditingTextId(null);
+
+    forceUpdate(n => n + 1);
+
+    setTimeout(() => {
+      isRestoringRef.current = false;
+    }, 50);
+  }, []);
 
   const handleUndo = () => {
     if (!canUndo) return;
@@ -250,30 +276,86 @@ const CanvasPage: React.FC = () => {
 
       if (work && work.canvasData) {
         isRestoringRef.current = true;
-        setLayers(work.canvasData.layers || [...defaultLayers]);
-        layerCounterRef.current = work.canvasData.layerCounter || 10;
+        const loadedLayers = work.canvasData.layers || [...defaultLayers];
+        const loadedCounter = work.canvasData.layerCounter || 10;
+
+        layersRef.current = loadedLayers;
+        selectedIdRef.current = null;
+        layerCounterRef.current = loadedCounter;
+
+        setLayers(loadedLayers);
         setSelectedElementId(null);
-        isRestoringRef.current = false;
-        saveToHistory();
+        setEditingTextId(null);
+
+        setTimeout(() => {
+          isRestoringRef.current = false;
+          isInitializedRef.current = true;
+          historyStackRef.current = [];
+          historyIndexRef.current = -1;
+          saveToHistory();
+        }, 50);
+
+        return true;
       }
     } catch (e) {
       console.error('[Canvas] 加载草稿失败:', e);
     }
+    return false;
   };
 
-  const handleSave = () => {
-    console.log('[Canvas] 保存草稿');
+  const initCanvas = async () => {
+    isRestoringRef.current = true;
 
+    try {
+      const res = await Taro.getStorage({ key: 'current_edit_work_id' }).catch(() => ({ data: null }));
+      const workId = res.data;
+
+      if (workId) {
+        await Taro.removeStorage({ key: 'current_edit_work_id' }).catch(() => { });
+        const loaded = await loadDraftWork(workId);
+        if (loaded) return;
+      }
+    } catch (e) {
+      console.error('[Canvas] 读取作品ID失败:', e);
+    }
+
+    const initLayers = [...defaultLayers];
+    layersRef.current = initLayers;
+    selectedIdRef.current = null;
+    layerCounterRef.current = 10;
+
+    setLayers(initLayers);
+    setSelectedElementId(null);
+    setEditingTextId(null);
+
+    setTimeout(() => {
+      isRestoringRef.current = false;
+      isInitializedRef.current = true;
+      historyStackRef.current = [];
+      historyIndexRef.current = -1;
+      saveToHistory();
+    }, 50);
+  };
+
+  useEffect(() => {
+    initCanvas();
+  }, []);
+
+  useDidShow(() => {
+    initCanvas();
+  });
+
+  const handleSave = () => {
     const canvasData = {
-      layers: JSON.parse(JSON.stringify(layers)),
+      layers: JSON.parse(JSON.stringify(layersRef.current)),
       layerCounter: layerCounterRef.current,
-      selectedElementId
+      selectedElementId: selectedIdRef.current
     };
 
     const workData = {
       id: 'work_' + Date.now(),
       title: '618活动主视觉',
-      cover: layers.find(l => l.type === 'image')?.content || '',
+      cover: layersRef.current.find(l => l.type === 'image')?.content || '',
       status: 'draft',
       size: '750×1334',
       updatedAt: new Date().toLocaleString('zh-CN'),
@@ -303,7 +385,7 @@ const CanvasPage: React.FC = () => {
   };
 
   const handleElementClick = (layerId: string) => {
-    const layer = layers.find(l => l.id === layerId);
+    const layer = layersRef.current.find(l => l.id === layerId);
     if (!layer || !layer.visible) return;
 
     if (layer.locked && layer.id !== 'bg1') {
@@ -314,63 +396,58 @@ const CanvasPage: React.FC = () => {
       return;
     }
 
-    if (editingTextId && editingTextId !== layerId) {
+    updateSelectedId(layerId);
+
+    if (layer.type === 'text' && !layer.locked) {
+      setEditingTextId(layerId);
+    } else {
       setEditingTextId(null);
     }
-
-    setSelectedElementId(layerId);
   };
 
   const handleCanvasClick = () => {
-    setSelectedElementId(null);
+    updateSelectedId(null);
     setEditingTextId(null);
   };
 
-  const handleTextDoubleClick = (layer: Layer) => {
-    if (layer.locked) return;
-    setEditingTextId(layer.id);
-    setEditingTextValue(layer.content);
-  };
-
   const handleTextContentChange = (value: string) => {
-    setEditingTextValue(value);
+    if (!editingTextId) return;
+    const newLayers = layersRef.current.map(l =>
+      l.id === editingTextId ? { ...l, content: value } : l
+    );
+    updateLayers(newLayers);
   };
 
   const handleTextContentConfirm = () => {
     if (!editingTextId) return;
 
-    const newContent = editingTextValue || '文字';
-    const shortName = newContent.slice(0, 8) + (newContent.length > 8 ? '...' : '');
-
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === editingTextId
-          ? { ...l, content: newContent, name: shortName }
-          : l
-      )
-    );
-
+    const layer = layersRef.current.find(l => l.id === editingTextId);
+    if (layer) {
+      const shortName = layer.content.slice(0, 8) + (layer.content.length > 8 ? '...' : '');
+      const newLayers = layersRef.current.map(l =>
+        l.id === editingTextId ? { ...l, name: shortName } : l
+      );
+      updateLayers(newLayers);
+      saveToHistory();
+    }
     setEditingTextId(null);
-    saveToHistory();
   };
 
   const handleColorChange = (color: string) => {
     if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId ? { ...l, color } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedElementId ? { ...l, color } : l
     );
+    updateLayers(newLayers);
     saveToHistory();
   };
 
   const handleOpacityChange = (opacity: number) => {
     if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId ? { ...l, opacity } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedElementId ? { ...l, opacity } : l
     );
+    updateLayers(newLayers);
   };
 
   const handleOpacityChangeEnd = () => {
@@ -380,41 +457,37 @@ const CanvasPage: React.FC = () => {
 
   const handleToggleShadow = () => {
     if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId ? { ...l, shadow: !l.shadow } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedElementId ? { ...l, shadow: !l.shadow } : l
     );
+    updateLayers(newLayers);
     saveToHistory();
   };
 
   const handleTextAlignChange = (align: 'left' | 'center' | 'right') => {
     if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId ? { ...l, textAlign: align } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedElementId ? { ...l, textAlign: align } : l
     );
+    updateLayers(newLayers);
     saveToHistory();
   };
 
   const handleFontChange = (fontId: string) => {
     if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId ? { ...l, fontFamily: fontId } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedElementId ? { ...l, fontFamily: fontId } : l
     );
+    updateLayers(newLayers);
     setBrandFont(fontId);
     saveToHistory();
   };
 
   const handleToggleVisibility = (layerId: string) => {
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === layerId ? { ...l, visible: !l.visible } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === layerId ? { ...l, visible: !l.visible } : l
     );
+    updateLayers(newLayers);
     saveToHistory();
   };
 
@@ -423,42 +496,44 @@ const CanvasPage: React.FC = () => {
       Taro.showToast({ title: '背景层不能解锁', icon: 'none' });
       return;
     }
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === layerId ? { ...l, locked: !l.locked } : l
-      )
+    const newLayers = layersRef.current.map(l =>
+      l.id === layerId ? { ...l, locked: !l.locked } : l
     );
+    updateLayers(newLayers);
     saveToHistory();
   };
 
   const handleMoveLayer = (layerId: string, direction: 'up' | 'down') => {
-    const layer = layers.find(l => l.id === layerId);
+    const layer = layersRef.current.find(l => l.id === layerId);
     if (layer?.locked) {
       Taro.showToast({ title: '锁定图层不能移动层级', icon: 'none' });
       return;
     }
 
-    const unsorted = layers.filter(l => !l.locked).sort((a, b) => b.zIndex - a.zIndex);
-    const currentIndex = unsorted.findIndex(l => l.id === layerId);
+    const unlockedSorted = layersRef.current
+      .filter(l => !l.locked)
+      .sort((a, b) => b.zIndex - a.zIndex);
+
+    const currentIndex = unlockedSorted.findIndex(l => l.id === layerId);
     if (currentIndex === -1) return;
 
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= unsorted.length) return;
+    if (targetIndex < 0 || targetIndex >= unlockedSorted.length) return;
 
-    const targetLayer = unsorted[targetIndex];
+    const targetLayer = unlockedSorted[targetIndex];
     if (!targetLayer) return;
 
-    setLayers(prev => {
-      const current = prev.find(ll => ll.id === layerId);
-      const target = prev.find(ll => ll.id === targetLayer.id);
-      if (!current || !target) return prev;
+    const current = layersRef.current.find(ll => ll.id === layerId);
+    const target = layersRef.current.find(ll => ll.id === targetLayer.id);
+    if (!current || !target) return;
 
-      return prev.map(l => {
-        if (l.id === layerId) return { ...l, zIndex: target.zIndex };
-        if (l.id === targetLayer.id) return { ...l, zIndex: current.zIndex };
-        return l;
-      });
+    const newLayers = layersRef.current.map(l => {
+      if (l.id === layerId) return { ...l, zIndex: target.zIndex };
+      if (l.id === targetLayer.id) return { ...l, zIndex: current.zIndex };
+      return l;
     });
+
+    updateLayers(newLayers);
     saveToHistory();
   };
 
@@ -467,14 +542,16 @@ const CanvasPage: React.FC = () => {
       Taro.showToast({ title: '背景层不能删除', icon: 'none' });
       return;
     }
-    const layer = layers.find(l => l.id === layerId);
+    const layer = layersRef.current.find(l => l.id === layerId);
     if (layer?.locked) {
       Taro.showToast({ title: '已锁定，不能删除', icon: 'none' });
       return;
     }
-    setLayers(prev => prev.filter(l => l.id !== layerId));
-    if (selectedElementId === layerId) {
-      setSelectedElementId(null);
+    const newLayers = layersRef.current.filter(l => l.id !== layerId);
+    updateLayers(newLayers);
+    if (selectedIdRef.current === layerId) {
+      updateSelectedId(null);
+      setEditingTextId(null);
     }
     saveToHistory();
   };
@@ -483,14 +560,13 @@ const CanvasPage: React.FC = () => {
     setSelectedBrand(brandIndex);
     const brand = brandColors[brandIndex];
 
-    setLayers(prev =>
-      prev.map(l => {
-        if (l.type === 'text' && !l.locked) {
-          return { ...l, color: brand.textColor, fontFamily: brandFont };
-        }
-        return l;
-      })
-    );
+    const newLayers = layersRef.current.map(l => {
+      if (l.type === 'text' && !l.locked) {
+        return { ...l, color: brand.textColor, fontFamily: brandFont };
+      }
+      return l;
+    });
+    updateLayers(newLayers);
     saveToHistory();
 
     Taro.showToast({
@@ -501,13 +577,15 @@ const CanvasPage: React.FC = () => {
 
   const handleBrandFontChange = (fontId: string) => {
     setBrandFont(fontId);
-    if (selectedElementId && selectedLayer?.type === 'text' && !selectedLayer.locked) {
-      setLayers(prev =>
-        prev.map(l =>
-          l.id === selectedElementId ? { ...l, fontFamily: fontId } : l
-        )
-      );
-      saveToHistory();
+    if (selectedIdRef.current) {
+      const selLayer = layersRef.current.find(l => l.id === selectedIdRef.current);
+      if (selLayer?.type === 'text' && !selLayer.locked) {
+        const newLayers = layersRef.current.map(l =>
+          l.id === selectedIdRef.current ? { ...l, fontFamily: fontId } : l
+        );
+        updateLayers(newLayers);
+        saveToHistory();
+      }
     }
   };
 
@@ -521,7 +599,7 @@ const CanvasPage: React.FC = () => {
       y: 50,
       width: 60,
       height: 10,
-      content: '双击编辑文字',
+      content: '点击编辑文字',
       fontSize: 24,
       color: '#ffffff',
       fontFamily: brandFont,
@@ -531,10 +609,12 @@ const CanvasPage: React.FC = () => {
       shadow: false,
       visible: true,
       locked: false,
-      zIndex: maxZIndex + 1
+      zIndex: Math.max(...layersRef.current.map(l => l.zIndex)) + 1
     };
-    setLayers(prev => [...prev, newLayer]);
-    setSelectedElementId(newId);
+    const newLayers = [...layersRef.current, newLayer];
+    updateLayers(newLayers);
+    updateSelectedId(newId);
+    setEditingTextId(newId);
     setActiveTab('properties');
     saveToHistory();
   };
@@ -568,10 +648,11 @@ const CanvasPage: React.FC = () => {
       shadow: false,
       visible: true,
       locked: false,
-      zIndex: maxZIndex + 1
+      zIndex: Math.max(...layersRef.current.map(l => l.zIndex)) + 1
     };
-    setLayers(prev => [...prev, newLayer]);
-    setSelectedElementId(newId);
+    const newLayers = [...layersRef.current, newLayer];
+    updateLayers(newLayers);
+    updateSelectedId(newId);
     setShowMaterialPicker(false);
     setActiveTab('properties');
     saveToHistory();
@@ -594,34 +675,36 @@ const CanvasPage: React.FC = () => {
       shadow: false,
       visible: true,
       locked: false,
-      zIndex: maxZIndex + 1,
+      zIndex: Math.max(...layersRef.current.map(l => l.zIndex)) + 1,
       cropX: 0,
       cropY: 0,
       cropScale: 1
     };
-    setLayers(prev => [...prev, newLayer]);
-    setSelectedElementId(newId);
+    const newLayers = [...layersRef.current, newLayer];
+    updateLayers(newLayers);
+    updateSelectedId(newId);
     setShowMaterialPicker(false);
     setActiveTab('properties');
     saveToHistory();
   };
 
   const handleReplaceImage = () => {
-    if (!selectedElementId || selectedLayer?.type !== 'image' || isLayerLocked) return;
+    if (!selectedIdRef.current) return;
+    const selLayer = layersRef.current.find(l => l.id === selectedIdRef.current);
+    if (selLayer?.type !== 'image' || selLayer?.locked) return;
     setPickerType('image');
     setPickerMode('replace');
     setShowMaterialPicker(true);
   };
 
   const handleReplaceImageConfirm = (imageUrl: string) => {
-    if (!selectedElementId || pickerMode !== 'replace') return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId
-          ? { ...l, content: imageUrl, cropX: 0, cropY: 0, cropScale: 1 }
-          : l
-      )
+    if (!selectedIdRef.current || pickerMode !== 'replace') return;
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedIdRef.current
+        ? { ...l, content: imageUrl, cropX: 0, cropY: 0, cropScale: 1 }
+        : l
     );
+    updateLayers(newLayers);
     setShowMaterialPicker(false);
     saveToHistory();
     Taro.showToast({
@@ -643,41 +726,47 @@ const CanvasPage: React.FC = () => {
   };
 
   const handleOpenCrop = () => {
-    if (!selectedElementId || selectedLayer?.type !== 'image' || isLayerLocked) return;
+    if (!selectedIdRef.current) return;
+    const selLayer = layersRef.current.find(l => l.id === selectedIdRef.current);
+    if (selLayer?.type !== 'image' || selLayer?.locked) return;
     setShowCropModal(true);
   };
 
   const handleCropAdjust = (direction: 'x' | 'y' | 'scale', delta: number) => {
-    if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l => {
-        if (l.id !== selectedElementId) return l;
-        if (direction === 'x') {
-          const newX = Math.max(-50, Math.min(50, (l.cropX || 0) + delta));
-          return { ...l, cropX: newX };
-        }
-        if (direction === 'y') {
-          const newY = Math.max(-50, Math.min(50, (l.cropY || 0) + delta));
-          return { ...l, cropY: newY };
-        }
-        if (direction === 'scale') {
-          const newScale = Math.max(0.5, Math.min(2, (l.cropScale || 1) + delta));
-          return { ...l, cropScale: Number(newScale.toFixed(2)) };
-        }
-        return l;
-      })
-    );
+    if (!selectedIdRef.current) return;
+    const selLayer = layersRef.current.find(l => l.id === selectedIdRef.current);
+    if (selLayer?.locked) return;
+
+    const newLayers = layersRef.current.map(l => {
+      if (l.id !== selectedIdRef.current) return l;
+      if (direction === 'x') {
+        const newX = Math.max(-50, Math.min(50, (l.cropX || 0) + delta));
+        return { ...l, cropX: newX };
+      }
+      if (direction === 'y') {
+        const newY = Math.max(-50, Math.min(50, (l.cropY || 0) + delta));
+        return { ...l, cropY: newY };
+      }
+      if (direction === 'scale') {
+        const newScale = Math.max(0.5, Math.min(2, (l.cropScale || 1) + delta));
+        return { ...l, cropScale: Number(newScale.toFixed(2)) };
+      }
+      return l;
+    });
+    updateLayers(newLayers);
   };
 
   const handleCropReset = () => {
-    if (!selectedElementId || isLayerLocked) return;
-    setLayers(prev =>
-      prev.map(l =>
-        l.id === selectedElementId
-          ? { ...l, cropX: 0, cropY: 0, cropScale: 1 }
-          : l
-      )
+    if (!selectedIdRef.current) return;
+    const selLayer = layersRef.current.find(l => l.id === selectedIdRef.current);
+    if (selLayer?.locked) return;
+
+    const newLayers = layersRef.current.map(l =>
+      l.id === selectedIdRef.current
+        ? { ...l, cropX: 0, cropY: 0, cropScale: 1 }
+        : l
     );
+    updateLayers(newLayers);
   };
 
   const handleCropConfirm = () => {
@@ -706,10 +795,11 @@ const CanvasPage: React.FC = () => {
       shadow: false,
       visible: true,
       locked: false,
-      zIndex: maxZIndex + 1
+      zIndex: Math.max(...layersRef.current.map(l => l.zIndex)) + 1
     };
-    setLayers(prev => [...prev, newLayer]);
-    setSelectedElementId(newId);
+    const newLayers = [...layersRef.current, newLayer];
+    updateLayers(newLayers);
+    updateSelectedId(newId);
     setActiveTab('properties');
     saveToHistory();
   };
@@ -722,115 +812,118 @@ const CanvasPage: React.FC = () => {
     });
   };
 
-  const dragStartPos = useRef<{ x: number; y: number; layerX: number; layerY: number } | null>(null);
-  const resizeStartPos = useRef<{ x: number; y: number; width: number; height: number; layerX: number; layerY: number } | null>(null);
-  const resizeHandleType = useRef<string>('');
-  const isDraggingRef = useRef(false);
-  const isResizingRef = useRef(false);
-
   const handleTouchStart = (e: any, layer: Layer) => {
     if (layer.locked || !layer.visible) return;
-    e.stopPropagation();
+    if (editingTextId && layer.type === 'text') return;
+    if (resizeTouchActiveRef.current) return;
 
     const touch = e.touches?.[0] || e;
-    const canvasRect = (e.currentTarget?.closest?.('.' + styles.canvasArea) || {});
 
-    isDraggingRef.current = true;
-    dragStartPos.current = {
-      x: touch.clientX,
-      y: touch.clientY,
+    dragStartRef.current = {
+      type: 'move',
+      startX: touch.clientX,
+      startY: touch.clientY,
       layerX: layer.x,
-      layerY: layer.y
+      layerY: layer.y,
+      layerW: layer.width,
+      layerH: layer.height,
+      layerId: layer.id
     };
 
-    setSelectedElementId(layer.id);
-  };
-
-  const handleTouchMove = (e: any) => {
-    if (isResizingRef.current && selectedElementId && resizeStartPos.current && resizeHandleType.current) {
-      const touch = e.touches?.[0] || e;
-      const start = resizeStartPos.current;
-      const handle = resizeHandleType.current;
-
-      const dx = (touch.clientX - start.x) / 300 * 50;
-      const dy = (touch.clientY - start.y) / 400 * 50;
-
-      setLayers(prev =>
-        prev.map(l => {
-          if (l.id !== selectedElementId) return l;
-
-          let newWidth = start.width;
-          let newHeight = start.height;
-          let newX = start.layerX;
-          let newY = start.layerY;
-
-          if (handle.includes('right')) {
-            newWidth = Math.max(10, start.width + dx * 2);
-          }
-          if (handle.includes('left')) {
-            newWidth = Math.max(10, start.width - dx * 2);
-            newX = start.layerX + dx;
-          }
-          if (handle.includes('bottom')) {
-            newHeight = Math.max(10, start.height + dy * 2);
-          }
-          if (handle.includes('top')) {
-            newHeight = Math.max(10, start.height - dy * 2);
-            newY = start.layerY + dy;
-          }
-
-          return { ...l, width: newWidth, height: newHeight, x: newX, y: newY };
-        })
-      );
-      return;
-    }
-
-    if (isDraggingRef.current && selectedElementId && dragStartPos.current) {
-      const touch = e.touches?.[0] || e;
-      const start = dragStartPos.current;
-
-      const dx = (touch.clientX - start.x) / 300 * 50;
-      const dy = (touch.clientY - start.y) / 400 * 50;
-
-      const newX = Math.max(0, Math.min(100, start.layerX + dx));
-      const newY = Math.max(0, Math.min(100, start.layerY + dy));
-
-      setLayers(prev =>
-        prev.map(l =>
-          l.id === selectedElementId ? { ...l, x: newX, y: newY } : l
-        )
-      );
+    updateSelectedId(layer.id);
+    if (layer.type === 'text' && !layer.locked) {
+      setEditingTextId(layer.id);
+    } else {
+      setEditingTextId(null);
     }
   };
 
-  const handleTouchEnd = () => {
-    if (isDraggingRef.current || isResizingRef.current) {
-      saveToHistory();
-    }
-    isDraggingRef.current = false;
-    isResizingRef.current = false;
-    dragStartPos.current = null;
-    resizeStartPos.current = null;
-    resizeHandleType.current = '';
-  };
-
-  const handleResizeStart = (e: any, layer: Layer, handleType: string) => {
+  const handleResizeStart = (e: any, layer: Layer, handle: string) => {
     if (layer.locked || !layer.visible) return;
     e.stopPropagation();
     e.preventDefault();
 
+    resizeTouchActiveRef.current = true;
+
     const touch = e.touches?.[0] || e;
 
-    isResizingRef.current = true;
-    resizeStartPos.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      width: layer.width,
-      height: layer.height,
+    dragStartRef.current = {
+      type: 'resize',
+      handle,
+      startX: touch.clientX,
+      startY: touch.clientY,
       layerX: layer.x,
-      layerY: layer.y
+      layerY: layer.y,
+      layerW: layer.width,
+      layerH: layer.height,
+      layerId: layer.id
     };
-    resizeHandleType.current = handleType;
+
+    updateSelectedId(layer.id);
+    setEditingTextId(null);
+  };
+
+  const handleTouchMove = (e: any) => {
+    const ds = dragStartRef.current;
+    if (!ds.type || !ds.layerId) return;
+
+    const touch = e.touches?.[0] || e;
+    const dx = (touch.clientX - ds.startX) / 200 * 30;
+    const dy = (touch.clientY - ds.startY) / 300 * 40;
+
+    if (ds.type === 'move') {
+      const newX = Math.max(5, Math.min(95, ds.layerX + dx));
+      const newY = Math.max(5, Math.min(95, ds.layerY + dy));
+      const newLayers = layersRef.current.map(l =>
+        l.id === ds.layerId ? { ...l, x: newX, y: newY } : l
+      );
+      updateLayers(newLayers);
+    } else if (ds.type === 'resize' && ds.handle) {
+      let newWidth = ds.layerW;
+      let newHeight = ds.layerH;
+      let newX = ds.layerX;
+      let newY = ds.layerY;
+
+      if (ds.handle.includes('right')) {
+        newWidth = Math.max(10, ds.layerW + dx);
+      }
+      if (ds.handle.includes('left')) {
+        const deltaW = ds.layerW - (ds.layerW - dx);
+        newWidth = Math.max(10, ds.layerW - dx);
+        newX = ds.layerX + (ds.layerW - newWidth) / 2;
+      }
+      if (ds.handle.includes('bottom')) {
+        newHeight = Math.max(5, ds.layerH + dy);
+      }
+      if (ds.handle.includes('top')) {
+        newHeight = Math.max(5, ds.layerH - dy);
+        newY = ds.layerY + (ds.layerH - newHeight) / 2;
+      }
+
+      const newLayers = layersRef.current.map(l =>
+        l.id === ds.layerId
+          ? { ...l, width: newWidth, height: newHeight, x: newX, y: newY }
+          : l
+      );
+      updateLayers(newLayers);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (dragStartRef.current.type) {
+      saveToHistory();
+    }
+    dragStartRef.current = {
+      type: null,
+      startX: 0,
+      startY: 0,
+      layerX: 0,
+      layerY: 0,
+      layerW: 0,
+      layerH: 0,
+      layerId: ''
+    };
+    resizeTouchActiveRef.current = false;
   };
 
   const renderCanvasElement = (layer: Layer) => {
@@ -865,25 +958,19 @@ const CanvasPage: React.FC = () => {
           opacity: layer.opacity,
           justifyContent: layer.type === 'text' ? getTextAlignStyle() : 'center',
           alignItems: 'center',
-          display: 'flex',
-          touchAction: 'none'
+          display: 'flex'
         }}
         onTouchStart={(e) => handleTouchStart(e, layer)}
         onClick={(e) => {
           e.stopPropagation();
           handleElementClick(layer.id);
         }}
-        onDoubleClick={() => {
-          if (layer.type === 'text') {
-            handleTextDoubleClick(layer);
-          }
-        }}
       >
         {layer.type === 'text' && (
           isEditing ? (
             <Input
               className={styles.elementTextInput}
-              value={editingTextValue}
+              value={layer.content}
               onInput={(e) => handleTextContentChange(e.detail.value)}
               onBlur={handleTextContentConfirm}
               onConfirm={handleTextContentConfirm}
@@ -947,21 +1034,33 @@ const CanvasPage: React.FC = () => {
             <View
               className={classNames(styles.resizeHandle, styles.topLeft)}
               onTouchStart={(e) => handleResizeStart(e, layer, 'topLeft')}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               onClick={(e) => e.stopPropagation()}
             />
             <View
               className={classNames(styles.resizeHandle, styles.topRight)}
               onTouchStart={(e) => handleResizeStart(e, layer, 'topRight')}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               onClick={(e) => e.stopPropagation()}
             />
             <View
               className={classNames(styles.resizeHandle, styles.bottomLeft)}
               onTouchStart={(e) => handleResizeStart(e, layer, 'bottomLeft')}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               onClick={(e) => e.stopPropagation()}
             />
             <View
               className={classNames(styles.resizeHandle, styles.bottomRight)}
               onTouchStart={(e) => handleResizeStart(e, layer, 'bottomRight')}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               onClick={(e) => e.stopPropagation()}
             />
           </>
@@ -1005,22 +1104,23 @@ const CanvasPage: React.FC = () => {
                 value={selectedLayer.content}
                 onInput={(e) => {
                   if (!isLocked) {
-                    setLayers(prev =>
-                      prev.map(l =>
-                        l.id === selectedElementId ? { ...l, content: e.detail.value } : l
-                      )
+                    const newLayers = layersRef.current.map(l =>
+                      l.id === selectedElementId ? { ...l, content: e.detail.value } : l
                     );
+                    updateLayers(newLayers);
                   }
                 }}
                 onBlur={() => {
                   if (!isLocked) {
-                    const shortName = selectedLayer.content.slice(0, 8) + (selectedLayer.content.length > 8 ? '...' : '');
-                    setLayers(prev =>
-                      prev.map(l =>
+                    const layer = layersRef.current.find(l => l.id === selectedElementId);
+                    if (layer) {
+                      const shortName = layer.content.slice(0, 8) + (layer.content.length > 8 ? '...' : '');
+                      const newLayers = layersRef.current.map(l =>
                         l.id === selectedElementId ? { ...l, name: shortName } : l
-                      )
-                    );
-                    saveToHistory();
+                      );
+                      updateLayers(newLayers);
+                      saveToHistory();
+                    }
                   }
                 }}
                 placeholder="输入文字内容"
@@ -1329,10 +1429,6 @@ const CanvasPage: React.FC = () => {
   const renderMaterialPicker = () => {
     if (!showMaterialPicker) return null;
 
-    const handleSelect = (value: string) => {
-      handleMaterialSelect(value);
-    };
-
     return (
       <View className={styles.modalOverlay} onClick={() => setShowMaterialPicker(false)}>
         <View className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -1351,7 +1447,7 @@ const CanvasPage: React.FC = () => {
                   <View
                     key={index}
                     className={styles.stickerItem}
-                    onClick={() => handleSelect(emoji)}
+                    onClick={() => handleMaterialSelect(emoji)}
                   >
                     <Text style={{ fontSize: '64rpx' }}>{emoji}</Text>
                   </View>
@@ -1363,7 +1459,7 @@ const CanvasPage: React.FC = () => {
                   <View
                     key={material.id}
                     className={styles.imageItem}
-                    onClick={() => handleSelect(material.cover)}
+                    onClick={() => handleMaterialSelect(material.cover)}
                   >
                     <Image
                       className={styles.imageItemImg}

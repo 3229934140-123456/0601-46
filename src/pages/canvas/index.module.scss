@@ -135,15 +135,21 @@
 
 .resizeHandle {
   position: absolute;
-  width: 24rpx;
-  height: 24rpx;
+  width: 40rpx;
+  height: 40rpx;
   background: #fff;
-  border: 3rpx solid $color-primary;
+  border: 4rpx solid $color-primary;
   border-radius: 50%;
+  z-index: 10;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.2);
 
-  &.bottomRight {
-    right: -12rpx;
-    bottom: -12rpx;
+  &::after {
+    content: '';
+    position: absolute;
+    top: -20rpx;
+    left: -20rpx;
+    right: -20rpx;
+    bottom: -20rpx;
   }
 }
 
@@ -494,23 +500,23 @@
 }
 
 .topLeft {
-  top: -12rpx;
-  left: -12rpx;
+  top: -20rpx;
+  left: -20rpx;
 }
 
 .topRight {
-  top: -12rpx;
-  right: -12rpx;
+  top: -20rpx;
+  right: -20rpx;
 }
 
 .bottomLeft {
-  bottom: -12rpx;
-  left: -12rpx;
+  bottom: -20rpx;
+  left: -20rpx;
 }
 
 .bottomRight {
-  bottom: -12rpx;
-  right: -12rpx;
+  bottom: -20rpx;
+  right: -20rpx;
 }
 
 .brandActive {
