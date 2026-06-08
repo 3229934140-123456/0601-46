@@ -100,9 +100,25 @@
     box-shadow: 0 0 0 4rpx rgba(123, 97, 255, 0.3);
   }
 
-  &.hidden {
-    opacity: 0.3;
+  &.lockedElement {
+    cursor: not-allowed;
   }
+}
+
+.lockIndicator {
+  position: absolute;
+  top: -20rpx;
+  right: -20rpx;
+  width: 40rpx;
+  height: 40rpx;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.2);
+  z-index: 10;
 }
 
 .elementText {
@@ -627,6 +643,60 @@
   flex-shrink: 0;
 }
 
+.cropControlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-md;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.cropControlLabel {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  width: 100rpx;
+}
+
+.cropControlBtns {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.cropCtrlBtn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-gray;
+  border-radius: $radius-sm;
+  font-size: 32rpx;
+  color: $color-text-primary;
+  transition: all $transition-fast;
+
+  &:active {
+    background: $color-primary-bg;
+    color: $color-primary;
+  }
+
+  &.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+}
+
+.cropValue {
+  width: 120rpx;
+  text-align: center;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  font-weight: $font-weight-medium;
+}
+
 .cropActions {
   display: flex;
   gap: $spacing-md;
@@ -647,4 +717,59 @@
   &:active {
     opacity: 0.8;
   }
+
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.lockedNotice {
+  padding: $spacing-md;
+  background: rgba(255, 159, 10, 0.1);
+  border-radius: $radius-md;
+  margin-bottom: $spacing-md;
+}
+
+.lockedNoticeText {
+  font-size: $font-size-sm;
+  color: $color-warning;
+  text-align: center;
+}
+
+.adjustButtons {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: $spacing-sm;
+}
+
+.adjustBtn {
+  flex: 1;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-bg-gray;
+  border-radius: $radius-sm;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  transition: all $transition-fast;
+
+  &:active {
+    background: $color-primary-bg;
+    color: $color-primary;
+  }
+}
+
+.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.layerHidden {
+  opacity: 0.5;
+}
+
+.layerHidden .layerName {
+  text-decoration: line-through;
 }
